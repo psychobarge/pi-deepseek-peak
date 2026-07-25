@@ -43,6 +43,10 @@ On session start, the extension reads the configured offset, computes the local 
 
 Peak windows (after offset): 03:00-06:00 and 08:00-12:00 local time at default UTC+2.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history.
+
 ## License
 
 MIT

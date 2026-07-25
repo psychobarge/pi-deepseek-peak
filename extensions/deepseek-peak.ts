@@ -26,8 +26,8 @@ function isPeak(offset: number): boolean {
 
 function statusText(offset: number, theme: { fg: (color: string, text: string) => string }): string {
 	return isPeak(offset)
-		? theme.fg("warning", "DS Peak")
-		: theme.fg("success", "DS Normal");
+		? theme.fg("warning", "\u{1F534} DS Peak")
+		: theme.fg("success", "\u{1F7E2} DS Normal");
 }
 
 export default {

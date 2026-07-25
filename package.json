@@ -1,7 +1,9 @@
 {
   "name": "pi-deepseek-peak",
-  "version": "1.0.0",
-  "description": "Pi extension: shows 🔴/🟢 DeepSeek peak hours in the status bar",
+  "version": "1.1.0",
+  "description": "Pi extension showing DeepSeek peak hours in the status bar",
+  "homepage": "https://github.com/psychobarge/psychobarge.dsstatus.pi",
+  "bugs": "https://github.com/psychobarge/psychobarge.dsstatus.pi/issues",
   "keywords": ["pi-package"],
   "pi": {
     "extensions": ["./extensions"]
