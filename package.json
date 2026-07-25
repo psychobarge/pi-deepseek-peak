@@ -1,0 +1,9 @@
+{
+  "name": "pi-deepseek-peak",
+  "version": "1.0.0",
+  "description": "Pi extension: shows 🔴/🟢 DeepSeek peak hours in the status bar",
+  "keywords": ["pi-package"],
+  "pi": {
+    "extensions": ["./extensions"]
+  }
+}

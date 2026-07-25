@@ -11,17 +11,20 @@ function statusText(theme: { fg: (color: string, text: string) => string }): str
 		: theme.fg("success", "🟢 DS Normal");
 }
 
-export default function (pi: ExtensionAPI) {
-	let timer: ReturnType<typeof setInterval> | null = null;
+export default {
+	name: "pi-deepseek-peak",
+	factory: function (pi: ExtensionAPI) {
+		let timer: ReturnType<typeof setInterval> | null = null;
 
-	pi.on("session_start", async (_event, ctx) => {
-		ctx.ui.setStatus("deepseek-peak", statusText(ctx.ui.theme));
-		timer = setInterval(() => {
+		pi.on("session_start", async (_event, ctx) => {
 			ctx.ui.setStatus("deepseek-peak", statusText(ctx.ui.theme));
-		}, 5 * 60 * 1000);
-	});
+			timer = setInterval(() => {
+				ctx.ui.setStatus("deepseek-peak", statusText(ctx.ui.theme));
+			}, 5 * 60 * 1000);
+		});
 
-	pi.on("session_shutdown", async () => {
-		if (timer !== null) clearInterval(timer);
-	});
-}
+		pi.on("session_shutdown", async () => {
+			if (timer !== null) clearInterval(timer);
+		});
+	},
+};
