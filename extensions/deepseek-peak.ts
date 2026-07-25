@@ -30,37 +30,34 @@ function statusText(offset: number, theme: { fg: (color: string, text: string) =
 		: theme.fg("success", "\u{1F7E2} DS Normal");
 }
 
-export default {
-	name: "pi-deepseek-peak",
-	factory: function (pi: ExtensionAPI) {
-		let timer: ReturnType<typeof setInterval> | null = null;
+export default function (pi: ExtensionAPI) {
+	let timer: ReturnType<typeof setInterval> | null = null;
 
-		function updateStatus(ctx: any) {
-			const offset = loadOffset();
-			ctx.ui.setStatus("deepseek-peak", statusText(offset, ctx.ui.theme));
-		}
+	function updateStatus(ctx: any) {
+		const offset = loadOffset();
+		ctx.ui.setStatus("deepseek-peak", statusText(offset, ctx.ui.theme));
+	}
 
-		pi.registerCommand("dsp-offset", {
-			description: "Set UTC offset for DeepSeek peak hours (default 2). Usage: /dsp-offset 3",
-			handler: async (args: string, ctx: any) => {
-				const n = parseInt(args, 10);
-				if (isNaN(n)) {
-					ctx.ui.notify(`Current offset: UTC+${loadOffset()}`, "info");
-					return;
-				}
-				saveOffset(n);
-				updateStatus(ctx);
-				ctx.ui.notify(`DeepSeek peak offset set to UTC+${n}`, "info");
-			},
-		});
-
-		pi.on("session_start", async (_event: any, ctx: any) => {
+	pi.registerCommand("dsp-offset", {
+		description: "Set UTC offset for DeepSeek peak hours (default 2). Usage: /dsp-offset 3",
+		handler: async (args: string, ctx: any) => {
+			const n = parseInt(args, 10);
+			if (isNaN(n)) {
+				ctx.ui.notify(`Current offset: UTC+${loadOffset()}`, "info");
+				return;
+			}
+			saveOffset(n);
 			updateStatus(ctx);
-			timer = setInterval(() => updateStatus(ctx), 5 * 60 * 1000);
-		});
+			ctx.ui.notify(`DeepSeek peak offset set to UTC+${n}`, "info");
+		},
+	});
 
-		pi.on("session_shutdown", async () => {
-			if (timer !== null) clearInterval(timer);
-		});
-	},
+	pi.on("session_start", async (_event: any, ctx: any) => {
+		updateStatus(ctx);
+		timer = setInterval(() => updateStatus(ctx), 5 * 60 * 1000);
+	});
+
+	pi.on("session_shutdown", async () => {
+		if (timer !== null) clearInterval(timer);
+	});
 };
