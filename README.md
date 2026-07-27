@@ -15,7 +15,7 @@ DeepSeek API pricing varies by time of day. Peak hours are more expensive. This 
 ## Install
 
 ```sh
-pi install git:github.com/psychobarge/deepseek-peak-pi-extension
+pi install git:github.com/psychobarge/pi-deepseek-peak
 ```
 
 Restart pi or run `/reload` to activate.
