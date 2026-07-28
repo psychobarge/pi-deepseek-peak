@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.0 (2026-07-28)
+
+- Switch install to `pi install npm:pi-deepseek-peak`
+- Add screenshot preview for pi.dev gallery
+
 ## 1.1.1 (2025-07-25)
 
 - Fix export format: default export is now the factory function directly (not wrapped in an object)
