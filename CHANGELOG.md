@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.1 (2026-08-13)
+
+- Fix crash on session replacement or `/reload`: status timer no longer holds a stale extension ctx
+- Timer now tracks the current session's ctx (refreshed on `session_start`, cleared on `session_shutdown`) and stops itself if the ctx ever goes stale
+
 ## 1.2.0 (2026-07-28)
 
 - Switch install to `pi install npm:pi-deepseek-peak`
