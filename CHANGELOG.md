@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0 (2026-08-24)
+
+- Off-peak all day on weekends (Saturdays/Sundays, Beijing time), per DeepSeek's updated billing rules (effective 2026-08-23)
+- Peak windows now match DeepSeek's published rule exactly: Mon-Fri 01:00-04:00 and 06:00-10:00 UTC; `/dsp-offset` no longer shifts the windows (kept for compatibility)
+- Add `/dsp-countdown on|off` option: shows the time until the next price change next to the status dot ("DS Peak for 1h30m", "DS Normal for 27h"), refreshed with the 5-minute status check
+- Add `scripts/selfcheck.ts` for the peak/countdown logic (`npm test`)
+
 ## 1.2.0 (2026-07-28)
 
 - Switch install to `pi install npm:pi-deepseek-peak`
