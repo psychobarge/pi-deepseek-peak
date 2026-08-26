@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.0 (2026-08-25)
+
+- Correct DeepSeek session pricing: each DeepSeek V4 assistant reply's stored `usage.cost` is patched at `message_end` with the rate in effect when the request completed (peak/off-peak, per model) — pi's footer and `/session` cost totals now reflect the real price
+- Add `/dsp-cost`: recomputes the whole session (peak/off-peak split, per-model tokens and cost) from stored messages, correct for sessions resumed from disk; nested tool usage and compaction summaries are attributed to the nearest preceding assistant message
+- Add DeepSeek V4 rate table (flash $0.44/$0.014/$1.32, pro $1.32/$0.044/$3.96 per 1M tokens; off-peak = exactly half); legacy `deepseek-chat`/`deepseek-reasoner` messages keep pi's bundled cost
+- Selfcheck now covers `requestCost`/`sessionCost` (`npm test`)
+
 ## 1.3.1 (2026-08-25)
 
 - Countdown next to the status dot is now on by default (`/dsp-countdown off` to disable); existing configs with `countdown: false` are respected
