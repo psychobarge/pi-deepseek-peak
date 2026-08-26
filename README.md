@@ -2,6 +2,8 @@
 
 Pi extension that shows DeepSeek peak hours in the TUI status bar.
 
+![Screenshot](screenshot.png)
+
 DeepSeek API pricing varies by time of day. Peak hours are more expensive. This extension adds a persistent status indicator so you know when you are in a peak window.
 
 ## Features
