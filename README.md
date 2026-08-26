@@ -8,7 +8,7 @@ DeepSeek API pricing varies by time of day. Peak hours are more expensive. This 
 
 - Status bar indicator: "DS Peak" or "DS Normal"
 - Follows DeepSeek's billing windows exactly: peak Mon-Fri 01:00-04:00 and 06:00-10:00 UTC; weekends (Sat/Sun Beijing time) are off-peak all day
-- Optional countdown to the next price change next to the dot (`/dsp-countdown on`): "DS Peak for 1h30m", "DS Normal for 27h"
+- Countdown to the next price change next to the dot (on by default, `/dsp-countdown off` to disable): "DS Peak for 1h30m", "DS Normal for 27h"
 - Auto-refresh every 5 minutes
 - Uses theme colors (warning for peak, success for normal)
 - Thats it
@@ -46,7 +46,7 @@ The remaining time is colored with the current state (red while peak, green whil
 /dsp-offset        # show stored offset
 ```
 
-The config file `~/.pi/agent/deepseek-peak.json` stores `{ "offset": 2, "countdown": false }` and persists across restarts.
+The config file `~/.pi/agent/deepseek-peak.json` stores `{ "offset": 2, "countdown": true }` and persists across restarts.
 
 ## How it works
 
