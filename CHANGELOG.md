@@ -2,6 +2,7 @@
 
 ## 1.3.1 (2026-08-25)
 
+- Countdown next to the status dot is now on by default (`/dsp-countdown off` to disable); existing configs with `countdown: false` are respected
 - Fix crash on session replacement or `/reload`: status timer no longer holds a stale extension ctx (crash reported in #1)
 - Timer now tracks the current session's ctx (refreshed on `session_start`, cleared on `session_shutdown`) and stops itself if the ctx ever goes stale
 

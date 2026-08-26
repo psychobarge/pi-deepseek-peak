@@ -20,7 +20,7 @@ interface Config {
 	countdown: boolean;
 }
 
-const DEFAULTS: Config = { offset: 2, countdown: false };
+const DEFAULTS: Config = { offset: 2, countdown: true };
 
 function loadConfig(): Config {
 	try {
