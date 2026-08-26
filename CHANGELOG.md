@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.1 (2026-08-25)
+
+- Fix crash on session replacement or `/reload`: status timer no longer holds a stale extension ctx (crash reported in #1)
+- Timer now tracks the current session's ctx (refreshed on `session_start`, cleared on `session_shutdown`) and stops itself if the ctx ever goes stale
+
 ## 1.3.0 (2026-08-24)
 
 - Off-peak all day on weekends (Saturdays/Sundays, Beijing time), per DeepSeek's updated billing rules (effective 2026-08-23)

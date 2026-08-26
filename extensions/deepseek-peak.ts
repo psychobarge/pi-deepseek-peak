@@ -94,9 +94,32 @@ export function statusText(countdown: boolean, theme: { fg: (color: string, text
 
 export default function (pi: ExtensionAPI) {
 	let timer: ReturnType<typeof setInterval> | null = null;
+	// ctx is session-bound: it goes stale after session replacement or /reload.
+	// Never capture it in a timer closure. Keep only the current session's ctx,
+	// refreshed on session_start and cleared on session_shutdown.
+	let currentCtx: any = null;
+
+	function stopTimer(): void {
+		if (timer !== null) {
+			clearInterval(timer);
+			timer = null;
+		}
+	}
 
 	function updateStatus(ctx: any) {
 		ctx.ui.setStatus("deepseek-peak", statusText(loadConfig().countdown, ctx.ui.theme));
+	}
+
+	function refreshStatus(): void {
+		if (currentCtx === null) return;
+		try {
+			updateStatus(currentCtx);
+		} catch {
+			// ctx went stale (session replaced or /reload). Stop polling instead of
+			// letting an uncaught exception escape the timer and crash pi.
+			stopTimer();
+			currentCtx = null;
+		}
 	}
 
 	pi.registerCommand("dsp-offset", {
@@ -127,11 +150,15 @@ export default function (pi: ExtensionAPI) {
 	});
 
 	pi.on("session_start", async (_event: any, ctx: any) => {
+		currentCtx = ctx;
 		updateStatus(ctx);
-		timer = setInterval(() => updateStatus(ctx), 5 * 60 * 1000);
+		if (timer === null) {
+			timer = setInterval(refreshStatus, 5 * 60 * 1000);
+		}
 	});
 
 	pi.on("session_shutdown", async () => {
-		if (timer !== null) clearInterval(timer);
+		stopTimer();
+		currentCtx = null;
 	});
 };
