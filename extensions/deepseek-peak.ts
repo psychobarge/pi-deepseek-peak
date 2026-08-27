@@ -13,21 +13,34 @@ const PEAK_WINDOWS: Array<[number, number]> = [
 	[6, 10],
 ];
 
+// Allowed auto-refresh intervals, in seconds. Keep in sync with the /dsp-refresh picker.
+const REFRESH_OPTIONS: Array<{ label: string; seconds: number }> = [
+	{ label: "30s", seconds: 30 },
+	{ label: "1m", seconds: 60 },
+	{ label: "5m", seconds: 300 },
+];
+
 interface Config {
 	// Kept for backward compatibility (existing config files / /dsp-offset command).
 	// DeepSeek windows are UTC, so the offset no longer affects the indicator.
 	offset: number;
 	countdown: boolean;
+	refresh: number; // seconds; must be one of REFRESH_OPTIONS
 }
 
-const DEFAULTS: Config = { offset: 2, countdown: true };
+const DEFAULTS: Config = { offset: 2, countdown: true, refresh: 300 };
 
 function loadConfig(): Config {
 	try {
 		const cfg = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
+		const refresh =
+			typeof cfg.refresh === "number" && REFRESH_OPTIONS.some((o) => o.seconds === cfg.refresh)
+				? cfg.refresh
+				: DEFAULTS.refresh;
 		return {
 			offset: typeof cfg.offset === "number" ? cfg.offset : DEFAULTS.offset,
 			countdown: typeof cfg.countdown === "boolean" ? cfg.countdown : DEFAULTS.countdown,
+			refresh,
 		};
 	} catch {
 		return { ...DEFAULTS };
@@ -122,6 +135,31 @@ export default function (pi: ExtensionAPI) {
 		}
 	}
 
+	pi.registerCommand("dsp-refresh", {
+		description: "Pick the status auto-refresh interval (30s / 1m / 5m) from a menu. No argument needed.",
+		handler: async (_args: string, ctx: any) => {
+			const current = loadConfig().refresh;
+			const label = (seconds: number) => REFRESH_OPTIONS.find((o) => o.seconds === seconds)!.label;
+			if (!ctx.hasUI) {
+				ctx.ui.notify(`Auto-refresh interval: ${label(current)}`, "info");
+				return;
+			}
+			const choice = await ctx.ui.select(
+				`Auto-refresh interval (current: ${label(current)})`,
+				REFRESH_OPTIONS.map((o) => o.label),
+			);
+			const picked = REFRESH_OPTIONS.find((o) => o.label === choice);
+			if (!picked) return; // cancelled
+			saveConfig({ refresh: picked.seconds });
+			if (timer !== null) {
+				clearInterval(timer);
+				timer = setInterval(refreshStatus, picked.seconds * 1000);
+			}
+			updateStatus(ctx);
+			ctx.ui.notify(`Auto-refresh set to ${picked.label}`, "info");
+		},
+	});
+
 	pi.registerCommand("dsp-offset", {
 		description: "Set UTC offset (compat only: DeepSeek windows are UTC, the indicator no longer depends on it). Usage: /dsp-offset 3",
 		handler: async (args: string, ctx: any) => {
@@ -153,7 +191,7 @@ export default function (pi: ExtensionAPI) {
 		currentCtx = ctx;
 		updateStatus(ctx);
 		if (timer === null) {
-			timer = setInterval(refreshStatus, 5 * 60 * 1000);
+			timer = setInterval(refreshStatus, loadConfig().refresh * 1000);
 		}
 	});
 
