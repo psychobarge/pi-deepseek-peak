@@ -7,9 +7,19 @@
   "bugs": "https://github.com/psychobarge/pi-deepseek-peak/issues",
   "license": "MIT",
   "author": "psychobarge",
-  "keywords": ["pi-package"],
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi-coding-agent",
+    "pi",
+    "deepseek"
+  ],
   "scripts": {
     "test": "node scripts/selfcheck.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/psychobarge/pi-deepseek-peak.git"
   },
   "pi": {
     "extensions": ["./extensions"],
