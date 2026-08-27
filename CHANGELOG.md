@@ -1,7 +1,10 @@
 # Changelog
 
-## 1.4.0 (2026-08-25)
+## 1.3.2 (2026-08-27)
 
+- `/dsp-refresh`: pick the status auto-refresh interval from a menu — 30s, 1m or 5m (default 5m, unchanged). Saved to `~/.pi/agent/deepseek-peak.json` (`refresh`, in seconds) and applied immediately; the countdown refreshes at the same interval
+- `/dsp-countdown` now picks on/off from a menu (no argument needed), mirroring `/dsp-refresh`
+- `/dsp-offset` removed: the windows are UTC, so the offset field is dropped from the config
 - Correct DeepSeek session pricing: each DeepSeek V4 assistant reply's stored `usage.cost` is patched at `message_end` with the rate in effect when the request completed (peak/off-peak, per model) — pi's footer and `/session` cost totals now reflect the real price
 - Add `/dsp-cost`: recomputes the whole session (peak/off-peak split, per-model tokens and cost) from stored messages, correct for sessions resumed from disk; nested tool usage and compaction summaries are attributed to the nearest preceding assistant message
 - Add DeepSeek V4 rate table (flash $0.44/$0.014/$1.32, pro $1.32/$0.044/$3.96 per 1M tokens; off-peak = exactly half); legacy `deepseek-chat`/`deepseek-reasoner` messages keep pi's bundled cost
