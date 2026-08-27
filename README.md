@@ -12,7 +12,7 @@ DeepSeek API pricing varies by time of day. Peak hours are more expensive. This 
 - Follows DeepSeek's billing windows exactly: peak Mon-Fri 01:00-04:00 and 06:00-10:00 UTC; weekends (Sat/Sun Beijing time) are off-peak all day
 - Countdown to the next price change next to the dot (on by default, toggle via `/dsp-countdown`): "DS Peak for 1h30m", "DS Normal for 27h"
 - Auto-refresh at a configurable interval (30s / 1m / 5m, default 5m) via `/dsp-refresh`
-- Correct DeepSeek V4 session pricing: each assistant reply's stored cost is patched at write time with the rate in effect when it completed (peak or off-peak), and `/dsp-cost` recomputes the whole session (peak/off-peak split, per model)
+- Correct DeepSeek V4 session pricing: each assistant reply's stored cost is patched at write time with the rate in effect when it completed (peak or off-peak), and `/dsp-cost` recomputes the whole session (peak/off-peak split, per model: flash, flash-vision-exp and pro)
 - Uses theme colors (warning for peak, success for normal)
 - Thats it
 
@@ -43,7 +43,7 @@ It recomputes the whole session from the stored messages (model and timestamp pe
 - Per-model token and cost lines
 - A note when any message had a model outside the rate table (e.g. legacy `deepseek-chat`): those keep pi's bundled cost
 
-DeepSeek's official rates (https://api-docs.deepseek.com/quick_start/pricing/): peak $0.44 input / $0.014 cache hit / $1.32 output per 1M tokens for flash, $1.32 / $0.044 / $3.96 for pro; off-peak is exactly half.
+DeepSeek's official rates (https://api-docs.deepseek.com/quick_start/pricing/): peak $0.44 input / $0.014 cache hit / $1.32 output per 1M tokens for flash and flash-vision-exp, $1.32 / $0.044 / $3.96 for pro; off-peak is exactly half.
 
 > **Note:** `/session` and the footer display the stored costs — correct for messages created after this extension was activated, but messages from before (or from a resumed session) keep pi's old flat-rate cost there. `/dsp-cost` is the only view that recomputes everything.
 
@@ -58,16 +58,6 @@ enable: "🔴 DS Peak for 1h30m"
 disable: "🔴 DS Peak"
 
 The remaining time is colored with the current state (red while peak, green while off-peak) and refreshes with the same status check. The setting is saved to `~/.pi/agent/deepseek-peak.json`.
-
-### Auto-refresh interval
-
-How often the status indicator refreshes. No value to type — a menu offers the three choices:
-
-```sh
-/dsp-refresh    # pick 30s, 1m or 5m from a menu
-```
-
-The current interval is shown in the picker title; pick another anytime to switch. The choice is saved to `~/.pi/agent/deepseek-peak.json` (`refresh`, in seconds, default 300) and applies immediately.
 
 ### Auto-refresh interval
 
@@ -144,6 +134,16 @@ pi install npm:pi-deepseek-peak
 ```
 
 and `/reload`. Iterating often? Mount the repo as a Docker volume (`-v ~/Workspace/Perso/pi-deepseek-peak:/app/pi-deepseek-peak ...`) and reinstall after each `git checkout` on the host.
+
+## Development
+
+Run the self-check for the peak/countdown/pricing logic:
+
+```sh
+npm test
+```
+
+Requires Node ≥ 22.18 (built-in TypeScript type stripping; no build step).
 
 ## Changelog
 
