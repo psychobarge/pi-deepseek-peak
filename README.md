@@ -57,7 +57,17 @@ Show how long until the green/red dot flips (e.g. red peak until 04:00 UTC). The
 enable: "🔴 DS Peak for 1h30m"
 disable: "🔴 DS Peak"
 
-The current state is shown in the picker title; the setting is saved to `~/.pi/agent/deepseek-peak.json` (`countdown`, default true) and applies immediately.
+The remaining time is colored with the current state (red while peak, green while off-peak) and refreshes with the same status check. The setting is saved to `~/.pi/agent/deepseek-peak.json`.
+
+### Auto-refresh interval
+
+How often the status indicator refreshes. No value to type — a menu offers the three choices:
+
+```sh
+/dsp-refresh    # pick 30s, 1m or 5m from a menu
+```
+
+The current interval is shown in the picker title; pick another anytime to switch. The choice is saved to `~/.pi/agent/deepseek-peak.json` (`refresh`, in seconds, default 300) and applies immediately.
 
 ### Auto-refresh interval
 
