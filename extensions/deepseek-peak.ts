@@ -21,14 +21,11 @@ const REFRESH_OPTIONS: Array<{ label: string; seconds: number }> = [
 ];
 
 interface Config {
-	// Kept for backward compatibility (existing config files / /dsp-offset command).
-	// DeepSeek windows are UTC, so the offset no longer affects the indicator.
-	offset: number;
 	countdown: boolean;
 	refresh: number; // seconds; must be one of REFRESH_OPTIONS
 }
 
-const DEFAULTS: Config = { offset: 2, countdown: true, refresh: 300 };
+const DEFAULTS: Config = { countdown: true, refresh: 300 };
 
 function loadConfig(): Config {
 	try {
@@ -38,7 +35,6 @@ function loadConfig(): Config {
 				? cfg.refresh
 				: DEFAULTS.refresh;
 		return {
-			offset: typeof cfg.offset === "number" ? cfg.offset : DEFAULTS.offset,
 			countdown: typeof cfg.countdown === "boolean" ? cfg.countdown : DEFAULTS.countdown,
 			refresh,
 		};
@@ -160,30 +156,21 @@ export default function (pi: ExtensionAPI) {
 		},
 	});
 
-	pi.registerCommand("dsp-offset", {
-		description: "Set UTC offset (compat only: DeepSeek windows are UTC, the indicator no longer depends on it). Usage: /dsp-offset 3",
-		handler: async (args: string, ctx: any) => {
-			const n = parseInt(args, 10);
-			if (isNaN(n)) {
-				ctx.ui.notify(`Stored offset: UTC+${loadConfig().offset} (compat only)`, "info");
-				return;
-			}
-			saveConfig({ offset: n });
-			ctx.ui.notify("Offset saved (compat only — DeepSeek windows are UTC, the indicator no longer depends on it)", "info");
-		},
-	});
-
 	pi.registerCommand("dsp-countdown", {
-		description: "Show time until the next price change next to the status dot. Usage: /dsp-countdown on|off",
-		handler: async (args: string, ctx: any) => {
-			const arg = args.trim().toLowerCase();
-			if (arg !== "on" && arg !== "off") {
-				ctx.ui.notify(`Countdown is ${loadConfig().countdown ? "on" : "off"}`, "info");
+		description: "Pick whether the countdown shows next to the status dot. No argument needed.",
+		handler: async (_args: string, ctx: any) => {
+			const current = loadConfig().countdown;
+			const label = (on: boolean) => (on ? "on" : "off");
+			if (!ctx.hasUI) {
+				ctx.ui.notify(`Countdown is ${label(current)}`, "info");
 				return;
 			}
-			saveConfig({ countdown: arg === "on" });
+			const choice = await ctx.ui.select(`Countdown (current: ${label(current)})`, ["on", "off"]);
+			const picked = choice === "on";
+			if (choice !== "on" && choice !== "off") return; // cancelled
+			saveConfig({ countdown: picked });
 			updateStatus(ctx);
-			ctx.ui.notify(`DeepSeek countdown ${arg}`, "info");
+			ctx.ui.notify(`DeepSeek countdown ${label(picked)}`, "info");
 		},
 	});
 
