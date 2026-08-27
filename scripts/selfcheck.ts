@@ -39,7 +39,7 @@ assert.equal(f(mon + 2.5 * H), "1h30m", "Mon 02:30 UTC -> 04:00 = 1h30m");
 assert.equal(f(mon + 3.25 * H), "45m", "Mon 03:15 UTC -> 04:00 = 45m");
 assert.equal(f(mon + 2 * H + 55 * 60000), "1h05m", "Mon 02:55 UTC -> 04:00 = 1h05m");
 assert.equal(f(mon + 3 * H), "1h", "Mon 03:00 UTC -> 04:00 = 1h");
-assert.equal(f(sat + 22 * H), "27h", "Sun 00:00 local (offset 2) -> Mon 01:00 UTC = 27h (user example)");
+assert.equal(f(sat + 22 * H), "27h", "Sat 22:00 UTC (Sun 00:00 Beijing) -> Mon 01:00 UTC = 27h (user example)");
 assert.equal(f(fri + 16 * H), "57h", "Beijing Sat 00:00 -> Mon 01:00 UTC = 57h (max)");
 
 // --- Full status strings with mock theme ---
