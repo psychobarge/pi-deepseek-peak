@@ -1,15 +1,25 @@
 {
   "name": "pi-deepseek-peak",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "Pi extension showing DeepSeek peak hour status in the status bar",
   "type": "module",
   "homepage": "https://github.com/psychobarge/pi-deepseek-peak",
   "bugs": "https://github.com/psychobarge/pi-deepseek-peak/issues",
   "license": "MIT",
   "author": "psychobarge",
-  "keywords": ["pi-package"],
+  "keywords": [
+    "pi-package",
+    "pi-extension",
+    "pi-coding-agent",
+    "pi",
+    "deepseek"
+  ],
   "scripts": {
     "test": "node scripts/selfcheck.ts"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/psychobarge/pi-deepseek-peak.git"
   },
   "pi": {
     "extensions": ["./extensions"],
