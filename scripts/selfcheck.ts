@@ -116,4 +116,36 @@ const rm = sessionCost([{ ...msgEntry("assistant", "deepseek-v4-flash", mon + 2 
 close(rm.total, 1.32);
 close(rm.byModel["deepseek-v4-pro"].cost, 1.32);
 
+// --- Flash rate cutover: DeepSeek cut flash prices on 2026-09-10 12:00 Beijing (= 04:00 UTC).
+// Pre-cutover messages keep the old table; from 04:00:00.000 UTC exactly the new one applies. ---
+const sep9 = Date.UTC(2026, 8, 9); // Wednesday
+const sep10 = Date.UTC(2026, 8, 10); // Thursday
+const cutoff = Date.UTC(2026, 8, 10, 4);
+
+// old table: peak Wed 02:00 UTC -> 0.44/M miss
+close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), sep9 + 2 * H).cost, 0.44);
+// exact boundary: 03:59:59.999 old peak 0.44; 04:00:00.000 new off-peak 0.15; +1ms unchanged
+close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), cutoff - 1).cost, 0.44);
+close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), cutoff).cost, 0.15);
+close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), cutoff + 1).cost, 0.15);
+// new table: peak Thu 07:00 UTC -> 0.30/M; off-peak Thu 20:00 UTC -> 0.15/M
+close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), sep10 + 7 * H).cost, 0.30);
+close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), sep10 + 20 * H).cost, 0.15);
+// new off-peak hit is $0.003/M: 1M miss + 100k hit + 200k out -> 0.15 + 0.0003 + 0.12
+close(requestCost("deepseek-v4-flash", u(1e6, 1e5, 2e5), sep10 + 20 * H).cost, 0.2703);
+close(requestCost("deepseek-v4-flash", u(0, 1e6, 0), sep10 + 20 * H).cost, 0.003);
+// flash-vision-exp shares the flash line both sides of the cutover
+close(requestCost("deepseek-v4-flash-vision-exp", u(1e6, 0, 0), cutoff - 1).cost, 0.44);
+close(requestCost("deepseek-v4-flash-vision-exp", u(1e6, 0, 0), sep10 + 7 * H).cost, 0.30);
+// pro unchanged across the cutover (peak Thu 07:00 -> 1.32; off-peak half)
+close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), sep10 + 7 * H).cost, 1.32);
+close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), cutoff).cost, 0.66);
+// sessionCost across the cutover: old peak (Wed 09:00 UTC) + new off-peak (Thu 20:00 UTC)
+const oldPeak = msgEntry("assistant", "deepseek-v4-flash", sep9 + 9 * H, u(1e6, 0, 0)); // 0.44
+const newOff = msgEntry("assistant", "deepseek-v4-flash", sep10 + 20 * H, u(1e6, 0, 0)); // 0.15
+const sc2 = sessionCost([oldPeak, newOff]);
+close(sc2.total, 0.59);
+close(sc2.peakCost, 0.44);
+close(sc2.offPeakCost, 0.15);
+
 console.log("selfcheck OK");
