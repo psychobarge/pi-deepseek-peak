@@ -65,10 +65,20 @@ export function isOffPeak(date: Date): boolean {
 // Off-peak = exactly half (official rule), derived at use time.
 // cacheWrite is free; legacy model ids (deepseek-chat/deepseek-reasoner) are not in the
 // table because their historical rates are unknowable — those keep pi's bundled cost.
-// ponytail: hardcoded per user choice — bump the package when DeepSeek changes rates.
-const RATES: Record<string, { input: number; cacheRead: number; output: number }> = {
-	"deepseek-v4-flash": { input: 0.44, cacheRead: 0.014, output: 1.32 },
-	"deepseek-v4-flash-vision-exp": { input: 0.44, cacheRead: 0.014, output: 1.32 },
+type Rate = { input: number; cacheRead: number; output: number };
+
+// Flash series (deepseek-v4-flash + deepseek-v4-flash-vision-exp, same price line).
+// DeepSeek cut flash prices on 2026-09-10 12:00 Beijing (= 04:00 UTC): messages completing
+// before FLASH_CUTOFF keep FLASH_RATES_OLD, from that instant on they use FLASH_RATES.
+// ponytail: hardcoded per user choice — bump FLASH_RATES + FLASH_CUTOFF on the next rate change.
+const FLASH_RATES_OLD: Rate = { input: 0.44, cacheRead: 0.014, output: 1.32 };
+const FLASH_RATES: Rate = { input: 0.3, cacheRead: 0.006, output: 1.2 };
+const FLASH_CUTOFF = Date.UTC(2026, 8, 10, 4); // 2026-09-10 12:00 Beijing = 04:00 UTC
+const FLASH_MODELS = ["deepseek-v4-flash", "deepseek-v4-flash-vision-exp"];
+
+const RATES: Record<string, Rate> = {
+	"deepseek-v4-flash": FLASH_RATES_OLD,
+	"deepseek-v4-flash-vision-exp": FLASH_RATES_OLD,
 	"deepseek-v4-pro": { input: 1.32, cacheRead: 0.044, output: 3.96 },
 };
 
@@ -87,9 +97,17 @@ function toMs(ts: Timestamp): number {
 	return typeof ts === "number" ? ts : new Date(ts).getTime();
 }
 
-/** Effective per-token rates (USD) for a model at a timestamp, or null when the model isn't in the table. */
-function rateFor(model: string, ts: Timestamp): { input: number; cacheRead: number; output: number } | null {
+/** Peak rates (USD/1M) for a model at a timestamp, or null when the model isn't in the table. */
+function ratesFor(model: string, ts: Timestamp): Rate | null {
 	const peak = RATES[model];
+	if (!peak) return null;
+	if (FLASH_MODELS.includes(model) && toMs(ts) >= FLASH_CUTOFF) return FLASH_RATES;
+	return peak;
+}
+
+/** Effective per-token rates (USD) for a model at a timestamp, or null when the model isn't in the table. */
+function rateFor(model: string, ts: Timestamp): Rate | null {
+	const peak = ratesFor(model, ts);
 	if (!peak) return null;
 	const k = isOffPeak(new Date(toMs(ts))) ? 0.5 : 1;
 	return { input: peak.input * k, cacheRead: peak.cacheRead * k, output: peak.output * k };
@@ -261,7 +279,8 @@ export default function (pi: ExtensionAPI) {
 			const fmt = (n: number) => `$${Math.round(n * 10000) / 10000}`;
 			const k = isOffPeak(new Date()) ? 0.5 : 1;
 			const rates = (m: string) => {
-				const r = RATES[m];
+				const r = ratesFor(m, new Date());
+				if (!r) return ""; // not in the table; no per-model line for it
 				return `in ${fmt(r.input * k)}/M (hit ${fmt(r.cacheRead * k)}) out ${fmt(r.output * k)}/M`;
 			};
 			const lines = [

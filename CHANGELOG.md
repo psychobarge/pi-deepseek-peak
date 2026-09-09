@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.3.3 (2026-09-09)
+
+- Flash series price cut (effective 2026-09-10 12:00 Beijing = 04:00 UTC): `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` messages completing at/after the cutover are priced at the new rates — $0.30 input / $0.006 cache hit / $1.20 output per 1M tokens at peak (half off-peak); messages before it keep the old $0.44 / $0.014 / $1.32 table
+- `/dsp-cost` and the stored-cost patch price each message with the table in effect at its completion time, so resumed sessions stay correct across the cutover; pro rates and the peak/off-peak windows are unchanged
+
 ## 1.3.2 (2026-08-27)
 
 - `/dsp-refresh`: pick the status auto-refresh interval from a menu — 30s, 1m or 5m (default 5m, unchanged). Saved to `~/.pi/agent/deepseek-peak.json` (`refresh`, in seconds) and applied immediately; the countdown refreshes at the same interval

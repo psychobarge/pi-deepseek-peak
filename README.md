@@ -36,14 +36,14 @@ Every DeepSeek V4 assistant reply is priced at the rate in effect when the reque
 /dsp-cost
 ```
 
-It recomputes the whole session from the stored messages (model and timestamp per message), so it is correct even for sessions resumed from disk. Output:
+It recomputes the whole session from the stored messages (model and timestamp per message), so it is correct even for sessions resumed from disk. Each message is priced at the rate table in effect when it completed — flash messages before 2026-09-10 04:00 UTC use the old rates, from that instant on the new ones. Output:
 
-- Current-period rates for both models (`DS Peak: flash in $0.44/M (hit $0.014) out $1.32/M · pro in $1.32/M (hit $0.044) out $3.96/M`)
+- Current-period rates for both models (`DS Peak: flash in $0.30/M (hit $0.006) out $1.20/M · pro in $1.32/M (hit $0.044) out $3.96/M`)
 - `Total $X (peak $A / off-peak $B)`
 - Per-model token and cost lines
 - A note when any message had a model outside the rate table (e.g. legacy `deepseek-chat`): those keep pi's bundled cost
 
-DeepSeek's official rates (https://api-docs.deepseek.com/quick_start/pricing/): peak $0.44 input / $0.014 cache hit / $1.32 output per 1M tokens for flash and flash-vision-exp, $1.32 / $0.044 / $3.96 for pro; off-peak is exactly half.
+DeepSeek's official rates (https://api-docs.deepseek.com/quick_start/pricing/): since 2026-09-10 12:00 Beijing (= 04:00 UTC), $0.30 input / $0.006 cache hit / $1.20 output per 1M tokens at peak (half off-peak) for flash and flash-vision-exp, $1.32 / $0.044 / $3.96 for pro; before that cutover, flash was $0.44 / $0.014 / $1.32. Off-peak is exactly half.
 
 > **Note:** `/session` and the footer display the stored costs — correct for messages created after this extension was activated, but messages from before (or from a resumed session) keep pi's old flat-rate cost there. `/dsp-cost` is the only view that recomputes everything.
 
@@ -79,7 +79,7 @@ Billing rule (https://api-docs.deepseek.com/quick_start/pricing/): peak hours ar
 
 When the countdown option is on, the time until the next status change is shown next to the dot, e.g. "🟢 DS Normal for 27h" on a weekend day (next peak starts Monday 01:00 UTC).
 
-The same peak/off-peak rule drives pricing: the extension patches each DeepSeek V4 assistant message's stored cost at `message_end` with the rate in effect at completion, and `/dsp-cost` recomputes the full session history.
+The same peak/off-peak rule drives pricing: the extension patches each DeepSeek V4 assistant message's stored cost at `message_end` with the rate table in effect at completion (peak/off-peak), and `/dsp-cost` recomputes the full session history. Flash series rates changed on 2026-09-10 04:00 UTC, so pre-cutover messages stay priced at the old flash table and later ones at the new.
 
 ## Testing an unpublished branch
 
