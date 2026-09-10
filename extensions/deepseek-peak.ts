@@ -67,7 +67,8 @@ export function isOffPeak(date: Date): boolean {
 // table because their historical rates are unknowable — those keep pi's bundled cost.
 type Rate = { input: number; cacheRead: number; output: number };
 
-// Flash series (deepseek-v4-flash + deepseek-v4-flash-vision-exp, same price line).
+// Flash series (deepseek-v4-flash + deepseek-v4-flash-vision-exp, same price line) plus the
+// canonical V4.1 id (deepseek-flash) that the API reports as `responseModel`.
 // DeepSeek cut flash prices on 2026-09-10 12:00 Beijing (= 04:00 UTC): messages completing
 // before FLASH_CUTOFF keep FLASH_RATES_OLD, from that instant on they use FLASH_RATES.
 // ponytail: hardcoded per user choice — bump FLASH_RATES + FLASH_CUTOFF on the next rate change.
@@ -75,8 +76,13 @@ const FLASH_RATES_OLD: Rate = { input: 0.44, cacheRead: 0.014, output: 1.32 };
 const FLASH_RATES: Rate = { input: 0.3, cacheRead: 0.006, output: 1.2 };
 const FLASH_CUTOFF = Date.UTC(2026, 8, 10, 4); // 2026-09-10 12:00 Beijing = 04:00 UTC
 const FLASH_MODELS = ["deepseek-v4-flash", "deepseek-v4-flash-vision-exp"];
+// V4 Pro is routed to V4.1 Flash on the server and billed at flash rates from
+// 2026-09-14 12:00 Beijing (= 04:00 UTC).
+// ponytail: temporary cutover state — handle a proper V4.1 Pro rate when it ships.
+const PRO_FLASH_CUTOFF = Date.UTC(2026, 8, 14, 4);
 
 const RATES: Record<string, Rate> = {
+	"deepseek-flash": FLASH_RATES,
 	"deepseek-v4-flash": FLASH_RATES_OLD,
 	"deepseek-v4-flash-vision-exp": FLASH_RATES_OLD,
 	"deepseek-v4-pro": { input: 1.32, cacheRead: 0.044, output: 3.96 },
@@ -101,7 +107,9 @@ function toMs(ts: Timestamp): number {
 function ratesFor(model: string, ts: Timestamp): Rate | null {
 	const peak = RATES[model];
 	if (!peak) return null;
-	if (FLASH_MODELS.includes(model) && toMs(ts) >= FLASH_CUTOFF) return FLASH_RATES;
+	const t = toMs(ts);
+	if (FLASH_MODELS.includes(model)) return t >= FLASH_CUTOFF ? FLASH_RATES : FLASH_RATES_OLD;
+	if (model === "deepseek-v4-pro" && t >= PRO_FLASH_CUTOFF) return FLASH_RATES;
 	return peak;
 }
 
@@ -111,6 +119,22 @@ function rateFor(model: string, ts: Timestamp): Rate | null {
 	if (!peak) return null;
 	const k = isOffPeak(new Date(toMs(ts))) ? 0.5 : 1;
 	return { input: peak.input * k, cacheRead: peak.cacheRead * k, output: peak.output * k };
+}
+
+/**
+ * First id present in the rate table wins (timestamp applied, so cutovers still hold).
+ * The API reports the canonical id (`responseModel`, e.g. `deepseek-flash`) while the
+ * requested id is the fallback, so callers pass `[responseModel, model]`.
+ * Returns null only when no id is known.
+ */
+function rateForIds(
+	ids: Array<string | undefined | null>,
+	ts: Timestamp,
+): { model: string; rate: Rate } | null {
+	for (const id of ids) {
+		if (id && RATES[id]) return { model: id, rate: rateFor(id, ts)! };
+	}
+	return null;
 }
 
 /** Real cost of one request (USD); `known: false` with pi's stored total for models outside the table. */
@@ -131,6 +155,7 @@ export interface SessionCost {
 	offPeakCost: number;
 	byModel: Record<string, { tokens: number; cost: number }>;
 	fallbackMessages: number;
+	unknownModels: string[];
 }
 
 /**
@@ -139,40 +164,54 @@ export interface SessionCost {
  * assistant message's model; without one they count at pi's stored cost (fallbackMessages).
  */
 export function sessionCost(entries: any[]): SessionCost {
-	const result: SessionCost = { total: 0, peakCost: 0, offPeakCost: 0, byModel: {}, fallbackMessages: 0 };
+	const result: SessionCost = {
+		total: 0,
+		peakCost: 0,
+		offPeakCost: 0,
+		byModel: {},
+		fallbackMessages: 0,
+		unknownModels: [],
+	};
+	const unknown = new Set<string>();
 	let lastModel: string | null = null;
 	for (const entry of entries) {
-		let model: string | null = null;
+		let ids: Array<string | undefined | null> = [];
 		let usage: UsageLike | null = null;
+		let isAssistant = false;
 		let ts: Timestamp = entry.timestamp;
 		if (entry.type === "message") {
 			const msg = entry.message;
 			ts = msg.timestamp ?? entry.timestamp;
 			if (msg.role === "assistant") {
-				model = msg.responseModel ?? msg.model;
-				lastModel = model;
+				ids = [msg.responseModel, msg.model];
+				isAssistant = true;
 				usage = msg.usage;
 			} else if (msg.role === "toolResult" && msg.usage) {
-				model = lastModel;
+				ids = [lastModel];
 				usage = msg.usage;
 			}
 		} else if ((entry.type === "compaction" || entry.type === "branch_summary") && entry.usage) {
-			model = lastModel;
+			ids = [lastModel];
 			usage = entry.usage;
 		}
 		if (!usage) continue;
-		const { cost, known } = requestCost(model ?? "", usage, ts);
-		result.total += cost;
-		if (!known) {
+		const resolved = rateForIds(ids, ts);
+		if (isAssistant) lastModel = resolved?.model ?? ids[0] ?? null;
+		if (!resolved) {
+			result.total += usage.cost?.total ?? 0;
 			result.fallbackMessages++;
+			for (const id of ids) if (id) unknown.add(id);
 			continue;
 		}
-		const bucket = (result.byModel[model!] ??= { tokens: 0, cost: 0 });
+		const { cost } = requestCost(resolved.model, usage, ts);
+		result.total += cost;
+		const bucket = (result.byModel[resolved.model] ??= { tokens: 0, cost: 0 });
 		bucket.tokens += usage.totalTokens ?? usage.input + usage.output + usage.cacheRead + usage.cacheWrite;
 		bucket.cost += cost;
 		if (isOffPeak(new Date(toMs(ts)))) result.offPeakCost += cost;
 		else result.peakCost += cost;
 	}
+	result.unknownModels = [...unknown];
 	return result;
 }
 
@@ -275,7 +314,7 @@ export default function (pi: ExtensionAPI) {
 	pi.registerCommand("dsp-cost", {
 		description: "Show the real DeepSeek session cost (peak/off-peak rates, per model). Usage: /dsp-cost",
 		handler: async (_args: string, ctx: any) => {
-			const { total, peakCost, offPeakCost, byModel, fallbackMessages } = sessionCost(ctx.sessionManager.getEntries());
+			const { total, peakCost, offPeakCost, byModel, fallbackMessages, unknownModels } = sessionCost(ctx.sessionManager.getEntries());
 			const fmt = (n: number) => `$${Math.round(n * 10000) / 10000}`;
 			const k = isOffPeak(new Date()) ? 0.5 : 1;
 			const rates = (m: string) => {
@@ -283,15 +322,21 @@ export default function (pi: ExtensionAPI) {
 				if (!r) return ""; // not in the table; no per-model line for it
 				return `in ${fmt(r.input * k)}/M (hit ${fmt(r.cacheRead * k)}) out ${fmt(r.output * k)}/M`;
 			};
+			// After PRO_FLASH_CUTOFF, ratesFor() already returns the flash table for pro; the
+			// suffix explains why pro and flash show the same numbers.
+			const proNote = Date.now() >= PRO_FLASH_CUTOFF ? " (routed to flash)" : "";
 			const lines = [
-				`${isOffPeak(new Date()) ? "DS Normal" : "DS Peak"}: flash ${rates("deepseek-v4-flash")} · pro ${rates("deepseek-v4-pro")}`,
+				`${isOffPeak(new Date()) ? "DS Normal" : "DS Peak"}: flash ${rates("deepseek-flash")} · pro ${rates("deepseek-v4-pro")}${proNote}`,
 				`Total ${fmt(total)} (peak ${fmt(peakCost)} / off-peak ${fmt(offPeakCost)})`,
 			];
 			for (const [model, b] of Object.entries(byModel)) {
 				lines.push(`${model}: ${b.tokens.toLocaleString("en-US")} tok · ${fmt(b.cost)}`);
 			}
 			if (fallbackMessages > 0) {
-				lines.push(`${fallbackMessages} message${fallbackMessages === 1 ? "" : "s"} kept at pi's bundled cost`);
+				const ids = unknownModels.length ? ` (${unknownModels.join(", ")})` : "";
+				lines.push(
+					`${fallbackMessages} message${fallbackMessages === 1 ? "" : "s"} without a rate entry${ids} — kept at pi's bundled cost`,
+				);
 			}
 			ctx.ui.notify(lines.join("\n"), "info");
 		},
@@ -320,8 +365,9 @@ export default function (pi: ExtensionAPI) {
 		if (msg.role !== "assistant" || !msg.usage) return;
 		// Patch the stored cost with the rate in effect when the request completed, so every
 		// pi cost surface (footer, /session, usage totals) shows the real DeepSeek price.
-		const rate = rateFor(msg.responseModel ?? msg.model, msg.timestamp ?? Date.now());
-		if (!rate) return; // unknown model: keep pi's stored cost
+		const resolved = rateForIds([msg.responseModel, msg.model], msg.timestamp ?? Date.now());
+		if (!resolved) return; // unknown model: keep pi's stored cost
+		const rate = resolved.rate;
 		const u = msg.usage;
 		const cost = {
 			input: (u.input * rate.input) / 1e6,
