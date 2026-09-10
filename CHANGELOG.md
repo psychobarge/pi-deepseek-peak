@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.4 (2026-09-10)
+
+- Fix silently wrong costs on V4.1 Flash: the API now reports `responseModel: "deepseek-flash"` for every request (including `deepseek-v4-flash`), and that id was missing from the rate table — `message_end` and `/dsp-cost` fell back to pi's bundled flat rate ($0.14/$0.28/$0.0028 per 1M). `deepseek-flash` is now priced at the V4.1 flash table ($0.30/$0.006/$1.20 at peak, half off-peak)
+- Resolve the rate from the id the API reported (`responseModel`) and fall back to the requested id instead of discarding the message when the reported id is unknown
+- V4 Pro is routed to V4.1 Flash server-side: from 2026-09-14 12:00 Beijing (= 04:00 UTC) `deepseek-v4-pro` messages are billed at the flash table. `/dsp-cost` shows `pro ... (routed to flash)` from that instant
+- `/dsp-cost` lists the unknown model ids when a message keeps pi's bundled cost (`N message(s) without a rate entry (id1, id2) — kept at pi's bundled cost`)
+- README: how pi's bundled catalogue lacks `deepseek-flash`, and a `~/.pi/agent/models.json` snippet to add it (needed for vision under the V4.1 id)
+
 ## 1.3.3 (2026-09-09)
 
 - Flash series price cut (effective 2026-09-10 12:00 Beijing = 04:00 UTC): `deepseek-v4-flash` and `deepseek-v4-flash-vision-exp` messages completing at/after the cutover are priced at the new rates — $0.30 input / $0.006 cache hit / $1.20 output per 1M tokens at peak (half off-peak); messages before it keep the old $0.44 / $0.014 / $1.32 table

@@ -148,4 +148,81 @@ close(sc2.total, 0.59);
 close(sc2.peakCost, 0.44);
 close(sc2.offPeakCost, 0.15);
 
+// --- V4.1: the API reports `responseModel: "deepseek-flash"` for every request (including
+// deepseek-v4-flash). It is the canonical id and must price at the V4.1 flash table. ---
+// Regression: requested deepseek-v4-flash, reported deepseek-flash, post-cutover.
+const reg = sessionCost([
+	{
+		type: "message",
+		timestamp: new Date(sep10 + 20 * H).toISOString(),
+		message: {
+			role: "assistant",
+			model: "deepseek-v4-flash",
+			responseModel: "deepseek-flash",
+			usage: u(1e6, 0, 0),
+			timestamp: sep10 + 20 * H,
+		},
+	},
+]);
+close(reg.total, 0.15); // V4.1 flash off-peak, not pi's bundled 0.14/M
+assert.equal(reg.fallbackMessages, 0);
+close(reg.byModel["deepseek-flash"].cost, 0.15);
+assert.equal(reg.byModel["deepseek-flash"].tokens, 1e6);
+assert.deepEqual(reg.unknownModels, []);
+
+// requestCost on the canonical id: peak 0.3 + 0.0006 + 0.24 = 0.5406
+close(requestCost("deepseek-flash", u(1e6, 1e5, 2e5), sep10 + 7 * H).cost, 0.5406);
+close(requestCost("deepseek-flash", u(1e6, 1e5, 2e5), sep10 + 20 * H).cost, 0.2703);
+close(requestCost("deepseek-flash", u(0, 1e6, 0), sep10 + 20 * H).cost, 0.003);
+
+// --- Pro withdrawal: routed to flash from 2026-09-14 04:00 UTC, billed at flash rates. ---
+const proCut = Date.UTC(2026, 8, 14, 4);
+// last millisecond before the cutover, Thu 03:59:59.999 UTC = peak -> pro 1.32/M
+close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), proCut - 1).cost, 1.32);
+// at the cutover, 04:00 UTC = off-peak -> flash 0.15/M
+close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), proCut).cost, 0.15);
+// +3h (07:00 UTC, peak) -> flash 0.30/M, not 1.32
+close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), proCut + 3 * H).cost, 0.30);
+const sc3 = sessionCost([
+	msgEntry("assistant", "deepseek-v4-pro", proCut - 1, u(1e6, 0, 0)), // 1.32 peak
+	msgEntry("assistant", "deepseek-v4-pro", proCut, u(1e6, 0, 0)), // 0.15 off-peak
+]);
+close(sc3.total, 1.47);
+close(sc3.peakCost, 1.32);
+close(sc3.offPeakCost, 0.15);
+
+// --- Unknown reported id: fall back to the requested id; both unknown -> pi's cost + listed id ---
+const unknownReported = sessionCost([
+	{
+		type: "message",
+		timestamp: new Date(sep10 + 20 * H).toISOString(),
+		message: {
+			role: "assistant",
+			model: "deepseek-v4-flash",
+			responseModel: "deepseek-v4.1-flash-x",
+			usage: u(1e6, 0, 0),
+			timestamp: sep10 + 20 * H,
+		},
+	},
+]);
+close(unknownReported.total, 0.15); // requested id resolves to the V4.1 flash table
+assert.equal(unknownReported.fallbackMessages, 0);
+assert.deepEqual(unknownReported.unknownModels, []);
+const allUnknown = sessionCost([
+	{
+		type: "message",
+		timestamp: new Date(sep10 + 20 * H).toISOString(),
+		message: {
+			role: "assistant",
+			model: "deepseek-v4.1-flash-x",
+			responseModel: "deepseek-v4.1-flash-x",
+			usage: u(100, 0, 0, 4.2),
+			timestamp: sep10 + 20 * H,
+		},
+	},
+]);
+close(allUnknown.total, 4.2);
+assert.equal(allUnknown.fallbackMessages, 1);
+assert.deepEqual(allUnknown.unknownModels, ["deepseek-v4.1-flash-x"]);
+
 console.log("selfcheck OK");
