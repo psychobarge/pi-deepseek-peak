@@ -75,19 +75,20 @@ const u = (input: number, cacheRead: number, output: number, storedTotal = 0) =>
 	cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: storedTotal },
 });
 
-// requestCost: flash, peak (Mon 02:00 UTC): 1M miss + 100k hit + 200k out -> 0.44 + 0.0014 + 0.264
-close(requestCost("deepseek-v4-flash", u(1e6, 1e5, 2e5), mon + 2 * H).cost, 0.7054);
+// requestCost: flash, peak (Mon 02:00 UTC): 1M miss + 100k hit + 200k out -> 0.3 + 0.0006 + 0.24
+close(requestCost("deepseek-flash", u(1e6, 1e5, 2e5), mon + 2 * H).cost, 0.5406);
 // off-peak (Mon 04:00) -> exactly half
-close(requestCost("deepseek-v4-flash", u(1e6, 1e5, 2e5), mon + 4 * H).cost, 0.3527);
+close(requestCost("deepseek-flash", u(1e6, 1e5, 2e5), mon + 4 * H).cost, 0.2703);
 // boundary 03:59:59.999 peak vs 04:00 off-peak
-close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), mon + 4 * H - 1).cost, 0.44);
-close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), mon + 4 * H).cost, 0.22);
+close(requestCost("deepseek-flash", u(1e6, 0, 0), mon + 4 * H - 1).cost, 0.3);
+close(requestCost("deepseek-flash", u(1e6, 0, 0), mon + 4 * H).cost, 0.15);
 // weekend Beijing rule applies to pricing: Sat 02:00 UTC -> off-peak rates
-close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), sat + 2 * H).cost, 0.22);
+close(requestCost("deepseek-flash", u(1e6, 0, 0), sat + 2 * H).cost, 0.15);
 // pro values: 1.32 + 0.0044 + 0.792 = 2.1164
 close(requestCost("deepseek-v4-pro", u(1e6, 1e5, 2e5), mon + 2 * H).cost, 2.1164);
 close(requestCost("deepseek-v4-pro", u(1e6, 1e5, 2e5), mon + 4 * H).cost, 1.0582);
-// unknown model -> known: false, cost = pi's stored total
+// retired ids and unknown models are not in the table -> known: false, cost = pi's stored total
+assert.deepEqual(requestCost("deepseek-v4-flash", u(100, 100, 100, 5.5), mon + 2 * H), { cost: 5.5, known: false });
 assert.deepEqual(requestCost("deepseek-chat", u(100, 100, 100, 5.5), mon + 2 * H), { cost: 5.5, known: false });
 
 // --- sessionCost: peak + off-peak assistants, nested tool usage attributed to preceding assistant ---
@@ -96,16 +97,16 @@ const msgEntry = (role: string, model: string, ts: number, usage: ReturnType<typ
 	timestamp: new Date(ts).toISOString(),
 	message: { role, model, usage, timestamp: ts },
 });
-const flashPeak = msgEntry("assistant", "deepseek-v4-flash", mon + 2 * H, u(1e6, 0, 0)); // 0.44 peak
+const flashPeak = msgEntry("assistant", "deepseek-flash", mon + 2 * H, u(1e6, 0, 0)); // 0.3 peak
 const proOff = msgEntry("assistant", "deepseek-v4-pro", mon + 4 * H, u(0, 0, 1e5)); // 0.198 off-peak
 const toolNested = msgEntry("toolResult", "deepseek-v4-pro", mon + 4.1 * H, u(1e6, 0, 0)); // 0.66 off-peak (pro)
 const fallback = msgEntry("assistant", "deepseek-chat", mon + 5 * H, u(100, 100, 100, 7)); // stored 7, unknown
 const sc = sessionCost([flashPeak, proOff, toolNested, fallback]);
-close(sc.total, 8.298);
-close(sc.peakCost, 0.44);
+close(sc.total, 8.158);
+close(sc.peakCost, 0.3);
 close(sc.offPeakCost, 0.858);
-close(sc.byModel["deepseek-v4-flash"].cost, 0.44);
-assert.equal(sc.byModel["deepseek-v4-flash"].tokens, 1e6);
+close(sc.byModel["deepseek-flash"].cost, 0.3);
+assert.equal(sc.byModel["deepseek-flash"].tokens, 1e6);
 close(sc.byModel["deepseek-v4-pro"].cost, 0.858);
 assert.equal(sc.byModel["deepseek-v4-pro"].tokens, 1.1e6);
 assert.equal(sc.fallbackMessages, 1);
@@ -118,41 +119,25 @@ const rm = sessionCost([{ ...msgEntry("assistant", "deepseek-v4-flash", mon + 2 
 close(rm.total, 1.32);
 close(rm.byModel["deepseek-v4-pro"].cost, 1.32);
 
-// --- Flash rate cutover: DeepSeek cut flash prices on 2026-09-10 12:00 Beijing (= 04:00 UTC).
-// Pre-cutover messages keep the old table; from 04:00:00.000 UTC exactly the new one applies. ---
+// --- Flash price is date-independent now (the 2026-09-10 cutover table is gone): the same
+// deepseek-flash rates apply to old and new messages, only peak/off-peak varies. ---
 const sep9 = Date.UTC(2026, 8, 9); // Wednesday
 const sep10 = Date.UTC(2026, 8, 10); // Thursday
-const cutoff = Date.UTC(2026, 8, 10, 4);
 
-// old table: peak Wed 02:00 UTC -> 0.44/M miss
-close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), sep9 + 2 * H).cost, 0.44);
-// exact boundary: 03:59:59.999 old peak 0.44; 04:00:00.000 new off-peak 0.15; +1ms unchanged
-close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), cutoff - 1).cost, 0.44);
-close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), cutoff).cost, 0.15);
-close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), cutoff + 1).cost, 0.15);
-// new table: peak Thu 07:00 UTC -> 0.30/M; off-peak Thu 20:00 UTC -> 0.15/M
-close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), sep10 + 7 * H).cost, 0.30);
-close(requestCost("deepseek-v4-flash", u(1e6, 0, 0), sep10 + 20 * H).cost, 0.15);
-// new off-peak hit is $0.003/M: 1M miss + 100k hit + 200k out -> 0.15 + 0.0003 + 0.12
-close(requestCost("deepseek-v4-flash", u(1e6, 1e5, 2e5), sep10 + 20 * H).cost, 0.2703);
-close(requestCost("deepseek-v4-flash", u(0, 1e6, 0), sep10 + 20 * H).cost, 0.003);
-// flash-vision-exp shares the flash line both sides of the cutover
-close(requestCost("deepseek-v4-flash-vision-exp", u(1e6, 0, 0), cutoff - 1).cost, 0.44);
-close(requestCost("deepseek-v4-flash-vision-exp", u(1e6, 0, 0), sep10 + 7 * H).cost, 0.30);
-// pro unchanged across the cutover (peak Thu 07:00 -> 1.32; off-peak half)
-close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), sep10 + 7 * H).cost, 1.32);
-close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), cutoff).cost, 0.66);
-// sessionCost across the cutover: old peak (Wed 09:00 UTC) + new off-peak (Thu 20:00 UTC)
-const oldPeak = msgEntry("assistant", "deepseek-v4-flash", sep9 + 9 * H, u(1e6, 0, 0)); // 0.44
-const newOff = msgEntry("assistant", "deepseek-v4-flash", sep10 + 20 * H, u(1e6, 0, 0)); // 0.15
-const sc2 = sessionCost([oldPeak, newOff]);
-close(sc2.total, 0.59);
-close(sc2.peakCost, 0.44);
-close(sc2.offPeakCost, 0.15);
+// peak 0.30/M miss whatever the date (Wed 02:00 and Thu 07:00 UTC are both peak)
+close(requestCost("deepseek-flash", u(1e6, 0, 0), sep9 + 2 * H).cost, 0.3);
+close(requestCost("deepseek-flash", u(1e6, 0, 0), sep10 + 7 * H).cost, 0.3);
+// off-peak 0.15/M miss, 0.003/M hit
+close(requestCost("deepseek-flash", u(1e6, 0, 0), sep9 + 20 * H).cost, 0.15);
+close(requestCost("deepseek-flash", u(1e6, 0, 0), sep10 + 20 * H).cost, 0.15);
+close(requestCost("deepseek-flash", u(0, 1e6, 0), sep10 + 20 * H).cost, 0.003);
+// retired ids are out of the table (they still price via the reported responseModel)
+assert.deepEqual(requestCost("deepseek-v4-flash", u(1e6, 0, 0, 3), sep10 + 7 * H), { cost: 3, known: false });
+assert.deepEqual(requestCost("deepseek-v4-flash-vision-exp", u(1e6, 0, 0, 3), sep10 + 7 * H), { cost: 3, known: false });
 
 // --- V4.1: the API reports `responseModel: "deepseek-flash"` for every request (including
 // deepseek-v4-flash). It is the canonical id and must price at the V4.1 flash table. ---
-// Regression: requested deepseek-v4-flash, reported deepseek-flash, post-cutover.
+// Regression: requested deepseek-v4-flash (out of the table), reported deepseek-flash.
 const reg = sessionCost([
 	{
 		type: "message",
@@ -177,21 +162,20 @@ close(requestCost("deepseek-flash", u(1e6, 1e5, 2e5), sep10 + 7 * H).cost, 0.540
 close(requestCost("deepseek-flash", u(1e6, 1e5, 2e5), sep10 + 20 * H).cost, 0.2703);
 close(requestCost("deepseek-flash", u(0, 1e6, 0), sep10 + 20 * H).cost, 0.003);
 
-// --- Pro withdrawal: routed to flash from 2026-09-14 04:00 UTC, billed at flash rates. ---
+// --- Pro keeps its own rates: the pro->flash routing was retracted, so 2026-09-14 04:00 UTC
+// (Monday, off-peak) and 07:00 UTC (peak) are billed at the pro table. ---
 const proCut = Date.UTC(2026, 8, 14, 4);
-// last millisecond before the cutover, Thu 03:59:59.999 UTC = peak -> pro 1.32/M
-close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), proCut - 1).cost, 1.32);
-// at the cutover, 04:00 UTC = off-peak -> flash 0.15/M
-close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), proCut).cost, 0.15);
-// +3h (07:00 UTC, peak) -> flash 0.30/M, not 1.32
-close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), proCut + 3 * H).cost, 0.30);
+// 04:00 UTC off-peak -> half of 1.32
+close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), proCut).cost, 0.66);
+// +3h (07:00 UTC, peak) -> full pro rate, not flash 0.30
+close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), proCut + 3 * H).cost, 1.32);
 const sc3 = sessionCost([
-	msgEntry("assistant", "deepseek-v4-pro", proCut - 1, u(1e6, 0, 0)), // 1.32 peak
-	msgEntry("assistant", "deepseek-v4-pro", proCut, u(1e6, 0, 0)), // 0.15 off-peak
+	msgEntry("assistant", "deepseek-v4-pro", proCut + 3 * H, u(1e6, 0, 0)), // 1.32 peak
+	msgEntry("assistant", "deepseek-v4-pro", proCut, u(1e6, 0, 0)), // 0.66 off-peak
 ]);
-close(sc3.total, 1.47);
+close(sc3.total, 1.98);
 close(sc3.peakCost, 1.32);
-close(sc3.offPeakCost, 0.15);
+close(sc3.offPeakCost, 0.66);
 
 // --- Unknown reported id: fall back to the requested id; both unknown -> pi's cost + listed id ---
 const unknownReported = sessionCost([
@@ -200,14 +184,14 @@ const unknownReported = sessionCost([
 		timestamp: new Date(sep10 + 20 * H).toISOString(),
 		message: {
 			role: "assistant",
-			model: "deepseek-v4-flash",
+			model: "deepseek-flash",
 			responseModel: "deepseek-v4.1-flash-x",
 			usage: u(1e6, 0, 0),
 			timestamp: sep10 + 20 * H,
 		},
 	},
 ]);
-close(unknownReported.total, 0.15); // requested id resolves to the V4.1 flash table
+close(unknownReported.total, 0.15); // falls back to the requested id, which is in the table
 assert.equal(unknownReported.fallbackMessages, 0);
 assert.deepEqual(unknownReported.unknownModels, []);
 const allUnknown = sessionCost([

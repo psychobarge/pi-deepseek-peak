@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.6 (2026-09-16)
+
+- Fix silently wrong costs on V4 Pro: the pro→flash routing has been retracted (DeepSeek keeps serving `deepseek-v4-pro` after 2026-09-14 with unchanged billing), so pro messages are billed at the pro rates ($1.32 / $0.044 / $3.96 per 1M at peak, half off-peak) at any date, in `message_end` as well as `/dsp-cost`; the `(routed to flash)` suffix is gone
+- Rate table reduced to the two models DeepSeek serves: `deepseek-flash` (V4.1-Flash) and `deepseek-v4-pro` (V4-Pro-0813), with no date-dependent cutover — only the peak/off-peak split varies
+- Retired ids (`deepseek-v4-flash`, `deepseek-v4-flash-vision-exp`) and the historical flash rates (pre-2026-09-10: $0.44 / $0.014 / $1.32) are out of the table: those messages keep pi's bundled cost and are listed by `/dsp-cost`. Retired ids still price correctly in practice because the API reports `responseModel: "deepseek-flash"`, which is resolved first
+- README: two served models, retired ids, pro billing unchanged, and a note that pro messages written under the old routing keep a flash-based stored cost (footer/`/session`) while `/dsp-cost` recomputes them
+
 ## 1.3.5 (2026-09-16)
 
 - Config file now honors `PI_CODING_AGENT_DIR`: it is read from and written to `$PI_CODING_AGENT_DIR/deepseek-peak.json` when that env var is set (leading `~` expanded, matching pi's own agent-dir resolution), and falls back to `~/.pi/agent/deepseek-peak.json` when unset (Thanks kralonur for pointing that out)
