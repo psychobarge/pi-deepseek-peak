@@ -58,7 +58,7 @@ Show how long until the green/red dot flips (e.g. red peak until 04:00 UTC). The
 enable: "🔴 DS Peak for 1h30m"
 disable: "🔴 DS Peak"
 
-The remaining time is colored with the current state (red while peak, green while off-peak) and refreshes with the same status check. The setting is saved to `~/.pi/agent/deepseek-peak.json`.
+The remaining time is colored with the current state (red while peak, green while off-peak) and refreshes with the same status check. The setting is saved to `$PI_CODING_AGENT_DIR/deepseek-peak.json` (default `~/.pi/agent/deepseek-peak.json` when `PI_CODING_AGENT_DIR` is unset).
 
 ### Auto-refresh interval
 
@@ -68,9 +68,9 @@ How often the status indicator refreshes. No value to type — a menu offers the
 /dsp-refresh    # pick 30s, 1m or 5m from a menu
 ```
 
-The current interval is shown in the picker title; pick another anytime to switch. The choice is saved to `~/.pi/agent/deepseek-peak.json` (`refresh`, in seconds, default 300) and applies immediately.
+The current interval is shown in the picker title; pick another anytime to switch. The choice is saved to `$PI_CODING_AGENT_DIR/deepseek-peak.json` (`refresh`, in seconds, default 300) and applies immediately.
 
-The config file `~/.pi/agent/deepseek-peak.json` stores `{ "countdown": true, "refresh": 300 }` and persists across restarts.
+The config file (`$PI_CODING_AGENT_DIR/deepseek-peak.json`, default `~/.pi/agent/deepseek-peak.json`) stores `{ "countdown": true, "refresh": 300 }` and persists across restarts. Changing `PI_CODING_AGENT_DIR` does not move an existing file — the extension starts from defaults at the new location.
 
 ## How it works
 
@@ -92,7 +92,7 @@ DeepSeek V4.1 Flash is live. Three model ids matter:
 
 The extension prices a message with the id the API reports first (`responseModel`), then the requested id, so all three land on the same V4.1 flash table.
 
-pi's bundled catalogue ships `deepseek-v4-flash`, `deepseek-v4-flash-vision-exp` and `deepseek-v4-pro` — but **not** `deepseek-flash`. An extension cannot add it: `registerProvider("deepseek", { models })` replaces the provider's whole model list. So add it yourself in `~/.pi/agent/models.json` (merge it — the provider's other models survive):
+pi's bundled catalogue ships `deepseek-v4-flash`, `deepseek-v4-flash-vision-exp` and `deepseek-v4-pro` — but **not** `deepseek-flash`. An extension cannot add it: `registerProvider("deepseek", { models })` replaces the provider's whole model list. So add it yourself in `$PI_CODING_AGENT_DIR/models.json` (default `~/.pi/agent/models.json`; merge it — the provider's other models survive):
 
 ```json
 {
@@ -128,7 +128,7 @@ Why bother: it is the only way to get **vision** (`input: ["text", "image"]`) un
 
 Gotchas:
 
-- `models.json` is global: `~/.pi/agent/models.json`, or `$PI_CODING_AGENT_DIR/models.json` when that env var is set.
+- `models.json` is global: `$PI_CODING_AGENT_DIR/models.json` (default `~/.pi/agent/models.json`).
 - `settings.json` `providers.*` is ignored (tested) — use `models.json`.
 - `enabledModels` only controls Ctrl+P cycling; it is not a whitelist.
 
