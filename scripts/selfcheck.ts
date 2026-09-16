@@ -1,7 +1,9 @@
 // Self-check for the peak/countdown logic. Zero deps: run with
 //   node scripts/selfcheck.ts   (Node >= 22.18; type stripping built in)
 import assert from "node:assert/strict";
-import { isOffPeak, nextPriceChange, formatCountdown, statusText, requestCost, sessionCost } from "../extensions/deepseek-peak.ts";
+import { homedir } from "node:os";
+import { join } from "node:path";
+import { isOffPeak, nextPriceChange, formatCountdown, statusText, requestCost, sessionCost, configPath } from "../extensions/deepseek-peak.ts";
 
 const H = 3600e3;
 // Fixed clock: 2026-08-21 = Friday, 08-22 = Saturday, 08-23 = Sunday, 08-24 = Monday (UTC).
@@ -224,5 +226,23 @@ const allUnknown = sessionCost([
 close(allUnknown.total, 4.2);
 assert.equal(allUnknown.fallbackMessages, 1);
 assert.deepEqual(allUnknown.unknownModels, ["deepseek-v4.1-flash-x"]);
+
+// --- Config path: $PI_CODING_AGENT_DIR when set (leading ~ expanded, like pi), else ~/.pi/agent ---
+const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
+try {
+	delete process.env.PI_CODING_AGENT_DIR;
+	assert.equal(configPath(), join(homedir(), ".pi", "agent", "deepseek-peak.json"), "unset env -> default ~/.pi/agent");
+	process.env.PI_CODING_AGENT_DIR = "";
+	assert.equal(configPath(), join(homedir(), ".pi", "agent", "deepseek-peak.json"), "empty env -> default");
+	process.env.PI_CODING_AGENT_DIR = "/home/u/.config/pi/agent";
+	assert.equal(configPath(), join("/home/u/.config/pi/agent", "deepseek-peak.json"), "absolute env (XDG) wins");
+	process.env.PI_CODING_AGENT_DIR = "~/cfg";
+	assert.equal(configPath(), join(homedir(), "cfg", "deepseek-peak.json"), "leading ~ expanded like pi");
+	process.env.PI_CODING_AGENT_DIR = "relative/cfg";
+	assert.equal(configPath(), join("relative/cfg", "deepseek-peak.json"), "relative env kept relative, like pi");
+} finally {
+	if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
+	else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+}
 
 console.log("selfcheck OK");

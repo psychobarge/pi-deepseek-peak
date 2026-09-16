@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.3.5 (2026-09-16)
+
+- Config file now honors `PI_CODING_AGENT_DIR`: it is read from and written to `$PI_CODING_AGENT_DIR/deepseek-peak.json` when that env var is set (leading `~` expanded, matching pi's own agent-dir resolution), and falls back to `~/.pi/agent/deepseek-peak.json` when unset (Thanks kralonur for pointing that out)
+- Changing `PI_CODING_AGENT_DIR` does not move an existing config: the extension starts from defaults at the new location and leaves the old file in place
+- Selfcheck now asserts the config-path resolution (env unset/empty/absolute/`~`/relative); README wording follows the env var (with the `~/.pi/agent` default called out)
+
 ## 1.3.4 (2026-09-10)
 
 - Fix silently wrong costs on V4.1 Flash: the API now reports `responseModel: "deepseek-flash"` for every request (including `deepseek-v4-flash`), and that id was missing from the rate table — `message_end` and `/dsp-cost` fell back to pi's bundled flat rate ($0.14/$0.28/$0.0028 per 1M). `deepseek-flash` is now priced at the V4.1 flash table ($0.30/$0.006/$1.20 at peak, half off-peak)

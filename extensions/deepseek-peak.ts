@@ -3,8 +3,6 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 
-const CONFIG_PATH = join(homedir(), ".pi/agent/deepseek-peak.json");
-
 const H = 3600e3; // one hour in ms
 // DeepSeek peak hours: 01:00-04:00 and 06:00-10:00 UTC, Monday-Friday
 // (weekends, Sat/Sun Beijing time, are off-peak all day).
@@ -27,9 +25,19 @@ interface Config {
 
 const DEFAULTS: Config = { countdown: true, refresh: 300 };
 
+/**
+ * Config file: `$PI_CODING_AGENT_DIR/deepseek-peak.json` when set (leading `~` expanded, like
+ * pi's own getAgentDir()), else `~/.pi/agent/deepseek-peak.json`.
+ */
+export function configPath(): string {
+	const dir = process.env.PI_CODING_AGENT_DIR;
+	const base = dir ? dir.replace(/^~(?=$|[\\/])/, homedir()) : join(homedir(), ".pi", "agent");
+	return join(base, "deepseek-peak.json");
+}
+
 function loadConfig(): Config {
 	try {
-		const cfg = JSON.parse(readFileSync(CONFIG_PATH, "utf-8"));
+		const cfg = JSON.parse(readFileSync(configPath(), "utf-8"));
 		const refresh =
 			typeof cfg.refresh === "number" && REFRESH_OPTIONS.some((o) => o.seconds === cfg.refresh)
 				? cfg.refresh
@@ -44,7 +52,7 @@ function loadConfig(): Config {
 }
 
 function saveConfig(patch: Partial<Config>): void {
-	writeFileSync(CONFIG_PATH, JSON.stringify({ ...loadConfig(), ...patch }, null, 2) + "\n");
+	writeFileSync(configPath(), JSON.stringify({ ...loadConfig(), ...patch }, null, 2) + "\n");
 }
 
 /** Day of week (0=Sun..6=Sat) in Beijing time (UTC+8) — DeepSeek bills weekends by Beijing time. */
