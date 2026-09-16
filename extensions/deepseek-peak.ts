@@ -68,32 +68,21 @@ export function isOffPeak(date: Date): boolean {
 	return !PEAK_WINDOWS.some(([start, end]) => h >= start && h < end);
 }
 
-// --- DeepSeek V4 pricing (USD per 1M tokens; peak rates) ---
+// --- DeepSeek pricing (USD per 1M tokens; peak rates) ---
 // Official: https://api-docs.deepseek.com/quick_start/pricing/
-// Off-peak = exactly half (official rule), derived at use time.
-// cacheWrite is free; legacy model ids (deepseek-chat/deepseek-reasoner) are not in the
-// table because their historical rates are unknowable — those keep pi's bundled cost.
+// Two models are served: deepseek-flash (V4.1-Flash) and deepseek-v4-pro (V4-Pro-0813).
+// The retired ids (deepseek-v4-flash, deepseek-v4-flash-vision-exp) are still accepted by the
+// API, served by V4.1-Flash and billed at the Flash price — the API reports `deepseek-flash`
+// as `responseModel`, which rateForIds() resolves first, so they price correctly anyway.
+// Off-peak = exactly half (official rule), derived at use time. cacheWrite is free.
+// hardcoded per user choice — bump on the next rate change.
 type Rate = { input: number; cacheRead: number; output: number };
 
-// Flash series (deepseek-v4-flash + deepseek-v4-flash-vision-exp, same price line) plus the
-// canonical V4.1 id (deepseek-flash) that the API reports as `responseModel`.
-// DeepSeek cut flash prices on 2026-09-10 12:00 Beijing (= 04:00 UTC): messages completing
-// before FLASH_CUTOFF keep FLASH_RATES_OLD, from that instant on they use FLASH_RATES.
-// ponytail: hardcoded per user choice — bump FLASH_RATES + FLASH_CUTOFF on the next rate change.
-const FLASH_RATES_OLD: Rate = { input: 0.44, cacheRead: 0.014, output: 1.32 };
 const FLASH_RATES: Rate = { input: 0.3, cacheRead: 0.006, output: 1.2 };
-const FLASH_CUTOFF = Date.UTC(2026, 8, 10, 4); // 2026-09-10 12:00 Beijing = 04:00 UTC
-const FLASH_MODELS = ["deepseek-v4-flash", "deepseek-v4-flash-vision-exp"];
-// V4 Pro is routed to V4.1 Flash on the server and billed at flash rates from
-// 2026-09-14 12:00 Beijing (= 04:00 UTC).
-// ponytail: temporary cutover state — handle a proper V4.1 Pro rate when it ships.
-const PRO_FLASH_CUTOFF = Date.UTC(2026, 8, 14, 4);
-
+const PRO_RATES: Rate = { input: 1.32, cacheRead: 0.044, output: 3.96 };
 const RATES: Record<string, Rate> = {
 	"deepseek-flash": FLASH_RATES,
-	"deepseek-v4-flash": FLASH_RATES_OLD,
-	"deepseek-v4-flash-vision-exp": FLASH_RATES_OLD,
-	"deepseek-v4-pro": { input: 1.32, cacheRead: 0.044, output: 3.96 },
+	"deepseek-v4-pro": PRO_RATES,
 };
 
 type UsageLike = {
@@ -111,26 +100,21 @@ function toMs(ts: Timestamp): number {
 	return typeof ts === "number" ? ts : new Date(ts).getTime();
 }
 
-/** Peak rates (USD/1M) for a model at a timestamp, or null when the model isn't in the table. */
-function ratesFor(model: string, ts: Timestamp): Rate | null {
-	const peak = RATES[model];
-	if (!peak) return null;
-	const t = toMs(ts);
-	if (FLASH_MODELS.includes(model)) return t >= FLASH_CUTOFF ? FLASH_RATES : FLASH_RATES_OLD;
-	if (model === "deepseek-v4-pro" && t >= PRO_FLASH_CUTOFF) return FLASH_RATES;
-	return peak;
+/** Peak rates (USD/1M) for a model, or null when the model isn't in the table. */
+function ratesFor(model: string): Rate | null {
+	return RATES[model] ?? null;
 }
 
 /** Effective per-token rates (USD) for a model at a timestamp, or null when the model isn't in the table. */
 function rateFor(model: string, ts: Timestamp): Rate | null {
-	const peak = ratesFor(model, ts);
+	const peak = ratesFor(model);
 	if (!peak) return null;
 	const k = isOffPeak(new Date(toMs(ts))) ? 0.5 : 1;
 	return { input: peak.input * k, cacheRead: peak.cacheRead * k, output: peak.output * k };
 }
 
 /**
- * First id present in the rate table wins (timestamp applied, so cutovers still hold).
+ * First id present in the rate table wins (the timestamp still picks peak or off-peak).
  * The API reports the canonical id (`responseModel`, e.g. `deepseek-flash`) while the
  * requested id is the fallback, so callers pass `[responseModel, model]`.
  * Returns null only when no id is known.
@@ -140,7 +124,7 @@ function rateForIds(
 	ts: Timestamp,
 ): { model: string; rate: Rate } | null {
 	for (const id of ids) {
-		if (id && RATES[id]) return { model: id, rate: rateFor(id, ts)! };
+		if (id && ratesFor(id)) return { model: id, rate: rateFor(id, ts)! };
 	}
 	return null;
 }
@@ -326,15 +310,12 @@ export default function (pi: ExtensionAPI) {
 			const fmt = (n: number) => `$${Math.round(n * 10000) / 10000}`;
 			const k = isOffPeak(new Date()) ? 0.5 : 1;
 			const rates = (m: string) => {
-				const r = ratesFor(m, new Date());
+				const r = ratesFor(m);
 				if (!r) return ""; // not in the table; no per-model line for it
 				return `in ${fmt(r.input * k)}/M (hit ${fmt(r.cacheRead * k)}) out ${fmt(r.output * k)}/M`;
 			};
-			// After PRO_FLASH_CUTOFF, ratesFor() already returns the flash table for pro; the
-			// suffix explains why pro and flash show the same numbers.
-			const proNote = Date.now() >= PRO_FLASH_CUTOFF ? " (routed to flash)" : "";
 			const lines = [
-				`${isOffPeak(new Date()) ? "DS Normal" : "DS Peak"}: flash ${rates("deepseek-flash")} · pro ${rates("deepseek-v4-pro")}${proNote}`,
+				`${isOffPeak(new Date()) ? "DS Normal" : "DS Peak"}: flash ${rates("deepseek-flash")} · pro ${rates("deepseek-v4-pro")}`,
 				`Total ${fmt(total)} (peak ${fmt(peakCost)} / off-peak ${fmt(offPeakCost)})`,
 			];
 			for (const [model, b] of Object.entries(byModel)) {
