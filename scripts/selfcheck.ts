@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { isOffPeak, nextPriceChange, formatCountdown, statusText, requestCost, sessionCost, configPath } from "../extensions/deepseek-peak.ts";
+import { isOffPeak, nextPriceChange, formatCountdown, statusText, requestCost, sessionCost, configPath, HOLIDAY_YEARS } from "../extensions/deepseek-peak.ts";
 
 const H = 3600e3;
 // Fixed clock: 2026-08-21 = Friday, 08-22 = Saturday, 08-23 = Sunday, 08-24 = Monday (UTC).
@@ -42,7 +42,30 @@ assert.equal(f(mon + 3.25 * H), "45m", "Mon 03:15 UTC -> 04:00 = 45m");
 assert.equal(f(mon + 2 * H + 55 * 60000), "1h05m", "Mon 02:55 UTC -> 04:00 = 1h05m");
 assert.equal(f(mon + 3 * H), "1h", "Mon 03:00 UTC -> 04:00 = 1h");
 assert.equal(f(sat + 22 * H), "27h", "Sat 22:00 UTC (Sun 00:00 Beijing) -> Mon 01:00 UTC = 27h (user example)");
-assert.equal(f(fri + 16 * H), "57h", "Beijing Sat 00:00 -> Mon 01:00 UTC = 57h (max)");
+assert.equal(f(fri + 16 * H), "2d9h", "Beijing Sat 00:00 -> Mon 01:00 UTC = 2d9h (long off-peak in days)");
+
+// --- Chinese public holidays (official 2026 State Council dates) are off-peak all day,
+// even on weekdays inside the UTC peak windows; 调休 make-up days are Sat/Sun anyway ---
+assert.equal(isOffPeak(new Date(Date.UTC(2026, 0, 1, 2))), true, "Thu 2026-01-01 02:00 UTC (New Year) -> off-peak");
+assert.equal(isOffPeak(new Date(Date.UTC(2026, 1, 16, 2))), true, "Mon 2026-02-16 02:00 UTC (Spring Festival) -> off-peak");
+assert.equal(isOffPeak(new Date(Date.UTC(2026, 3, 6, 3))), true, "Mon 2026-04-06 03:00 UTC (Ching Ming) -> off-peak");
+assert.equal(isOffPeak(new Date(Date.UTC(2026, 4, 1, 2))), true, "Fri 2026-05-01 02:00 UTC (Labour Day) -> off-peak");
+assert.equal(isOffPeak(new Date(Date.UTC(2026, 5, 19, 2))), true, "Fri 2026-06-19 02:00 UTC (Dragon Boat) -> off-peak");
+assert.equal(isOffPeak(new Date(Date.UTC(2026, 8, 25, 7))), true, "Fri 2026-09-25 07:00 UTC (Mid-Autumn) -> off-peak");
+assert.equal(isOffPeak(new Date(Date.UTC(2026, 9, 1, 7))), true, "Thu 2026-10-01 07:00 UTC (National Day) -> off-peak");
+// A plain weekday is still peak, and a make-up workday stays off-peak (it is a Sunday).
+assert.equal(isOffPeak(new Date(Date.UTC(2026, 1, 9, 2))), false, "Mon 2026-02-09 02:00 UTC (no holiday) -> peak");
+assert.equal(isOffPeak(new Date(Date.UTC(2026, 0, 4, 2))), true, "Sun 2026-01-04 02:00 UTC (make-up workday) -> off-peak");
+// Holiday edges are Beijing midnights: Spring Festival ends after Mon 2026-02-23.
+assert.equal(isOffPeak(new Date(Date.UTC(2026, 1, 24, 0, 59))), true, "Tue 2026-02-24 00:59 UTC -> off-peak");
+assert.equal(isOffPeak(new Date(Date.UTC(2026, 1, 24, 1))), false, "Tue 2026-02-24 01:00 UTC -> peak");
+// The scan horizon spans the whole Spring Festival (the old 4-day window returned null).
+assert.equal(
+	nextPriceChange(new Date(Date.UTC(2026, 1, 15, 3)))?.getTime(),
+	Date.UTC(2026, 1, 24, 1),
+	"Sun 2026-02-15 03:00 UTC -> next flip Tue 2026-02-24 01:00 UTC",
+);
+assert.equal(f(Date.UTC(2026, 1, 15, 3)), "8d22h", "Spring Festival countdown uses days");
 
 // --- Full status strings with mock theme ---
 const theme = { fg: (color: string, text: string) => `[${color}]${text}[/${color}]` };
@@ -118,6 +141,16 @@ assert.equal(lone.fallbackMessages, 1);
 const rm = sessionCost([{ ...msgEntry("assistant", "deepseek-v4-flash", mon + 2 * H, u(1e6, 0, 0)), message: { role: "assistant", model: "deepseek-v4-flash", responseModel: "deepseek-v4-pro", usage: u(1e6, 0, 0), timestamp: mon + 2 * H } }]);
 close(rm.total, 1.32);
 close(rm.byModel["deepseek-v4-pro"].cost, 1.32);
+
+// --- Holiday weekdays price at off-peak rates, and mix with normal peak days in a session ---
+close(requestCost("deepseek-flash", u(1e6, 0, 0), Date.UTC(2026, 1, 16, 2)).cost, 0.15); // Spring Festival Monday
+const holidayMix = sessionCost([
+	msgEntry("assistant", "deepseek-flash", Date.UTC(2026, 1, 16, 2), u(1e6, 0, 0)), // holiday -> 0.15
+	msgEntry("assistant", "deepseek-flash", Date.UTC(2026, 1, 9, 2), u(1e6, 0, 0)), // normal Monday -> 0.3
+]);
+close(holidayMix.total, 0.45);
+close(holidayMix.peakCost, 0.3);
+close(holidayMix.offPeakCost, 0.15);
 
 // --- Flash price is date-independent now (the 2026-09-10 cutover table is gone): the same
 // deepseek-flash rates apply to old and new messages, only peak/off-peak varies. ---
@@ -228,5 +261,11 @@ try {
 	if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 	else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
 }
+
+// --- Bundled holiday table must cover the current year (refresh from publicholidays.cn) ---
+assert.ok(
+	HOLIDAY_YEARS.includes(new Date().getUTCFullYear()),
+	"holiday table needs a refresh — see https://publicholidays.cn/",
+);
 
 console.log("selfcheck OK");

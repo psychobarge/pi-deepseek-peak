@@ -28,7 +28,9 @@ Restart pi or run `/reload` to activate.
 ## Usage
 
 Once installed, the status bar shows the current DeepSeek pricing period. Peak and off-peak rules, windows, and current rates live at
-<https://api-docs.deepseek.com/quick_start/pricing/> — in short: peak Mon–Fri 01:00–04:00 and 06:00–10:00 UTC, weekends off-peak all day, off-peak rates are half the peak ones.
+<https://api-docs.deepseek.com/quick_start/pricing/> — in short: peak Mon–Fri 01:00–04:00 and 06:00–10:00 UTC, weekends and Chinese public holidays off-peak in full, off-peak rates are half the peak ones.
+
+Chinese public holidays come from a table bundled in the source, taken from <https://publicholidays.cn/> (official State Council dates). Only the officially released year is bundled — the State Council publishes the next year's dates in November/December, so refresh `CHINA_HOLIDAY_RANGES` in `extensions/deepseek-peak.ts` once a year; `npm test` fails with a reminder once the table no longer covers the current year. Make-up workdays (调休) need no entry: they always fall on a Saturday or Sunday, which are off-peak anyway. The countdown switches to days for long off-peak stretches ("DS Normal for 8d22h" during Spring Festival).
 
 ### Commands
 

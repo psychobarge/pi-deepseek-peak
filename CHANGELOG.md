@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.3.7 (2026-10-01)
+
+- Chinese public holidays are now off-peak in full, per DeepSeek's rule ("peak hours … excluding Chinese public holidays"): status, countdown, `message_end` cost patching and `/dsp-cost` all treat holiday weekdays as off-peak
+- Holiday dates are bundled in `extensions/deepseek-peak.ts` (`CHINA_HOLIDAY_RANGES`), taken from <https://publicholidays.cn/> (official 2026 State Council dates). Only the yearly bump is needed, in November when the next year's notice lands; `npm test` fails with a reminder once the table stops covering the current year. Make-up workdays (调休) need no entry — they are always Sat/Sun, already off-peak
+- Countdown for long off-peak stretches now uses days: "8d22h" instead of "206h"; gaps under 48h are unchanged ("27h", "1h30m")
+- `nextPriceChange` scans 21 days ahead (was 4) so the countdown spans a multi-day holiday instead of going blank
+- Status label, commands and config file unchanged (no new key)
+
 ## 1.3.6 (2026-09-16)
 
 - Fix silently wrong costs on V4 Pro: the pro→flash routing has been retracted (DeepSeek keeps serving `deepseek-v4-pro` after 2026-09-14 with unchanged billing), so pro messages are billed at the pro rates ($1.32 / $0.044 / $3.96 per 1M at peak, half off-peak) at any date, in `message_end` as well as `/dsp-cost`; the `(routed to flash)` suffix is gone

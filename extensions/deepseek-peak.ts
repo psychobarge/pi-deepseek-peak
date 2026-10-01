@@ -4,12 +4,40 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 const H = 3600e3; // one hour in ms
-// DeepSeek peak hours: 01:00-04:00 and 06:00-10:00 UTC, Monday-Friday
-// (weekends, Sat/Sun Beijing time, are off-peak all day).
+// DeepSeek peak hours: 01:00-04:00 and 06:00-10:00 UTC, Monday-Friday, excluding Chinese
+// public holidays (weekends, Sat/Sun Beijing time, and holidays are off-peak all day).
 const PEAK_WINDOWS: Array<[number, number]> = [
 	[1, 4],
 	[6, 10],
 ];
+
+// Chinese public holidays (official State Council dates), off-peak in full. Source:
+// https://publicholidays.cn/ (2026 official; refresh each November when the notice for
+// the next year is released). Make-up workdays (调休) need no entry: they are always
+// Sat/Sun, which are off-peak anyway, so only weekday holidays can change a decision.
+const CHINA_HOLIDAY_RANGES: Array<[string, string]> = [
+	["2026-01-01", "2026-01-03"], // New Year
+	["2026-02-15", "2026-02-23"], // Spring Festival
+	["2026-04-04", "2026-04-06"], // Ching Ming
+	["2026-05-01", "2026-05-05"], // Labour Day
+	["2026-06-19", "2026-06-21"], // Dragon Boat
+	["2026-09-25", "2026-09-27"], // Mid-Autumn
+	["2026-10-01", "2026-10-07"], // National Day
+];
+
+/** Years covered by CHINA_HOLIDAY_RANGES (the selfcheck refuses to pass on a stale table). */
+export const HOLIDAY_YEARS: number[] = [
+	...new Set(CHINA_HOLIDAY_RANGES.map(([from]) => Number(from.slice(0, 4)))),
+];
+
+// Beijing calendar-day keys ("YYYY-MM-DD"), expanded once at load (UTC math, no DST).
+const HOLIDAY_DAYS = new Set<string>();
+for (const [from, to] of CHINA_HOLIDAY_RANGES) {
+	const end = Date.parse(`${to}T00:00:00Z`);
+	for (let t = Date.parse(`${from}T00:00:00Z`); t <= end; t += 24 * H) {
+		HOLIDAY_DAYS.add(new Date(t).toISOString().slice(0, 10));
+	}
+}
 
 // Allowed auto-refresh intervals, in seconds. Keep in sync with the /dsp-refresh picker.
 const REFRESH_OPTIONS: Array<{ label: string; seconds: number }> = [
@@ -55,15 +83,21 @@ function saveConfig(patch: Partial<Config>): void {
 	writeFileSync(configPath(), JSON.stringify({ ...loadConfig(), ...patch }, null, 2) + "\n");
 }
 
-/** Day of week (0=Sun..6=Sat) in Beijing time (UTC+8) — DeepSeek bills weekends by Beijing time. */
-function beijingDay(date: Date): number {
-	return new Date(date.getTime() + 8 * H).getUTCDay();
+/** Beijing time (UTC+8) as a Date whose getUTC* fields read Beijing values. */
+function beijing(date: Date): Date {
+	return new Date(date.getTime() + 8 * H);
 }
 
-/** True when DeepSeek bills off-peak: all day on weekends (Sat/Sun Beijing time), otherwise outside the UTC peak windows. */
+/**
+ * True when DeepSeek bills off-peak: all day on weekends (Sat/Sun Beijing time) and on
+ * Chinese public holidays, otherwise outside the UTC peak windows. Peak windows fall
+ * inside a single Beijing calendar day, so the holiday lookup by date is exact.
+ */
 export function isOffPeak(date: Date): boolean {
-	const dow = beijingDay(date);
+	const bj = beijing(date);
+	const dow = bj.getUTCDay();
 	if (dow === 0 || dow === 6) return true;
+	if (HOLIDAY_DAYS.has(bj.toISOString().slice(0, 10))) return true;
 	const h = date.getUTCHours();
 	return !PEAK_WINDOWS.some(([start, end]) => h >= start && h < end);
 }
@@ -207,18 +241,23 @@ export function sessionCost(entries: any[]): SessionCost {
 	return result;
 }
 
+// How far ahead nextPriceChange looks. Spring Festival is ~9.5 contiguous off-peak days
+// (weekend + holiday), so 4 days would return null and blank the countdown mid-holiday.
+const CHANGE_SCAN_DAYS = 21;
+
 /**
  * First instant where the green/red status flips, or null (never within range).
- * Candidates: UTC window edges (01:00/04:00/06:00/10:00) and Beijing midnights, for
- * the 4 UTC calendar days starting today. Boundaries where the status stays the same
- * (e.g. weekend end = Beijing Monday midnight while local is Sunday evening) are skipped.
+ * Candidates: UTC window edges (01:00/04:00/06:00/10:00) and Beijing midnights — holiday
+ * boundaries are Beijing midnights too — for the 21 UTC calendar days starting today.
+ * Boundaries where the status stays the same (e.g. weekend end = Beijing Monday midnight
+ * while local is Sunday evening) are skipped.
  */
 export function nextPriceChange(date: Date): Date | null {
 	const now = date.getTime();
 	const day = Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
 	const state = isOffPeak(date);
 	const candidates: number[] = [];
-	for (let i = 0; i < 4; i++) {
+	for (let i = 0; i < CHANGE_SCAN_DAYS; i++) {
 		const d = day + i * 24 * H;
 		for (const h of [1, 4, 6, 10]) candidates.push(d + h * H);
 		candidates.push(d - 8 * H); // Beijing midnight
@@ -229,14 +268,23 @@ export function nextPriceChange(date: Date): Date | null {
 	return null;
 }
 
-/** Time until the next status flip: "27h", "1h30m", "45m" (rounded up to the minute). */
+/** Minutes as "2h", "1h30m", "45m" (empty for 0). */
+function formatHM(m: number): string {
+	if (m === 0) return "";
+	if (m < 60) return `${m}m`;
+	const h = Math.floor(m / 60);
+	const min = m % 60;
+	return min === 0 ? `${h}h` : `${h}h${String(min).padStart(2, "0")}m`;
+}
+
+/** Time until the next status flip: "8d22h", "27h", "1h30m", "45m" (rounded up to the minute). */
 export function formatCountdown(date: Date): string {
 	const next = nextPriceChange(date);
 	if (!next) return "";
 	const m = Math.ceil((next.getTime() - date.getTime()) / 60000);
-	if (m % 60 === 0) return `${m / 60}h`;
-	if (m < 60) return `${m}m`;
-	return `${Math.floor(m / 60)}h${String(m % 60).padStart(2, "0")}m`;
+	// Long off-peak stretches (Chinese holidays) read better in days.
+	if (m >= 48 * 60) return `${Math.floor(m / 1440)}d${formatHM(m % 1440)}`;
+	return formatHM(m);
 }
 
 export function statusText(countdown: boolean, theme: { fg: (color: string, text: string) => string }, now: Date = new Date()): string {
