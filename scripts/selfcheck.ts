@@ -1,7 +1,8 @@
 // Self-check for the peak/countdown logic. Zero deps: run with
 //   node scripts/selfcheck.ts   (Node >= 22.18; type stripping built in)
 import assert from "node:assert/strict";
-import { homedir } from "node:os";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import extension, { isOffPeak, nextPriceChange, formatCountdown, statusText, requestCost, sessionCost, configPath, HOLIDAY_YEARS } from "../extensions/deepseek-peak.ts";
 
@@ -283,6 +284,25 @@ try {
 } finally {
 	if (savedAgentDir === undefined) delete process.env.PI_CODING_AGENT_DIR;
 	else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
+}
+
+// --- Config save: creates a missing agent dir, writes atomically (no .tmp left behind) ---
+{
+	const saved = process.env.PI_CODING_AGENT_DIR;
+	const root = mkdtempSync(join(tmpdir(), "dsp-"));
+	try {
+		process.env.PI_CODING_AGENT_DIR = join(root, "missing", "agent");
+		const commands: Record<string, any> = {};
+		extension({ on: () => {}, registerCommand: (name: string, cmd: any) => (commands[name] = cmd) } as any);
+		const ctx = { hasUI: true, ui: { select: async () => "off", notify: () => {}, setStatus: () => {}, theme: { fg: (_c: string, t: string) => t } } };
+		await commands["dsp-countdown"].handler("", ctx);
+		assert.deepEqual(JSON.parse(readFileSync(configPath(), "utf-8")), { countdown: false, refresh: 300 });
+		assert.equal(existsSync(configPath() + ".tmp"), false);
+	} finally {
+		rmSync(root, { recursive: true, force: true });
+		if (saved === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = saved;
+	}
 }
 
 // --- Bundled holiday table must cover the current year, and the next one from November

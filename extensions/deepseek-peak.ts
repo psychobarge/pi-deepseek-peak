@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 
 const H = 3600e3; // one hour in ms
 // DeepSeek peak hours: 01:00-04:00 and 06:00-10:00 UTC, Monday-Friday, excluding Chinese
@@ -87,7 +87,12 @@ function loadConfig(): Config {
 }
 
 function saveConfig(patch: Partial<Config>): void {
-	writeFileSync(configPath(), JSON.stringify({ ...loadConfig(), ...patch }, null, 2) + "\n");
+	const path = configPath();
+	const data = JSON.stringify({ ...loadConfig(), ...patch }, null, 2) + "\n";
+	mkdirSync(dirname(path), { recursive: true });
+	// write-then-rename: a kill mid-write leaves the old file intact instead of a truncated one
+	writeFileSync(path + ".tmp", data);
+	renameSync(path + ".tmp", path);
 }
 
 /** Beijing time (UTC+8) as a Date whose getUTC* fields read Beijing values. */
