@@ -13,7 +13,7 @@ Pi extension that shows DeepSeek peak hours in the TUI status bar, and prices th
 
 - Status bar indicator: "DS Peak" or "DS Normal", with a countdown to the next price change ("DS Peak for 1h30m") — toggle via `/dsp-countdown`
 - Auto-refresh at 30s / 1m / 5m (default 5m) via `/dsp-refresh`
-- Real session pricing: each assistant reply's stored cost is patched at write time with the rate in effect when it completed, and `/dsp-cost` recomputes the whole session (peak/off-peak split, per model)
+- Real session pricing: each assistant reply's stored cost is patched at write time with the rate in effect when the request started (pi's `timestamp`), and `/dsp-cost` recomputes the whole session (peak/off-peak split, per model)
 - Uses theme colors (warning for peak, success for normal)
 - Thats it
 
@@ -40,12 +40,14 @@ Chinese public holidays come from a table bundled in the source, taken from <htt
 /dsp-cost         # recompute the whole session's real cost
 ```
 
-`/dsp-cost` re-prices every message from its stored model and timestamp, so it is correct for sessions resumed from disk, and prints:
+`/dsp-cost` re-prices every message from its stored model and request-start timestamp, so it is correct for sessions resumed from disk, and prints:
 
 - current-period rates per model
 - `Total $X (peak $A / off-peak $B)`
 - per-model token and cost lines
 - any model id without a rate entry (those keep pi's bundled cost)
+
+The peak/off-peak rate is picked at the instant the request started (pi's `timestamp`). DeepSeek does not document whether it bills the rate at receipt or at completion, so a request that straddles 01:00/04:00/06:00/10:00 UTC is shown at the rate of its start.
 
 `/session` and the footer show the stored costs, patched by this extension at write time; `/dsp-cost` is the only view that recomputes everything.
 

@@ -139,7 +139,10 @@ function ratesFor(model: string): Rate | null {
 	return RATES[model] ?? null;
 }
 
-/** Effective per-token rates (USD) for a model at a timestamp, or null when the model isn't in the table. */
+/**
+ * Effective per-token rates (USD) for a model at a timestamp, or null when the model isn't in the table.
+ * `ts` is the instant the request started (`message.timestamp`), never the response end.
+ */
 function rateFor(model: string, ts: Timestamp): Rate | null {
 	const peak = ratesFor(model);
 	if (!peak) return null;
@@ -185,7 +188,7 @@ export interface SessionCost {
 }
 
 /**
- * Real session cost from session entries: per-message model and timestamp, peak/off-peak split.
+ * Real session cost from session entries: per-message model and request-start timestamp, peak/off-peak split.
  * Nested tool usage and compaction/branch summaries are attributed to the nearest preceding
  * assistant message's model; without one they count at pi's stored cost (fallbackMessages).
  */
@@ -400,8 +403,10 @@ export default function (pi: ExtensionAPI) {
 	pi.on("message_end", async (event: any, _ctx: any) => {
 		const msg = event.message;
 		if (msg.role !== "assistant" || !msg.usage) return;
-		// Patch the stored cost with the rate in effect when the request completed, so every
-		// pi cost surface (footer, /session, usage totals) shows the real DeepSeek price.
+		// Patch the stored cost with the rate in effect when the request started (pi's `timestamp`),
+		// so every pi cost surface (footer, /session, usage totals) shows the real DeepSeek price.
+		// DeepSeek does not document whether it resolves the rate at receipt or at completion;
+		// the request start is used, and it is the only instant pi records for legacy messages.
 		const resolved = rateForIds([msg.responseModel, msg.model], msg.timestamp ?? Date.now());
 		if (!resolved) return; // unknown model: keep pi's stored cost
 		const rate = resolved.rate;

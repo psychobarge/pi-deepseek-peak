@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Documentation only, no behavior change: the peak/off-peak rate is picked at the instant the request **started** (pi's `timestamp`), which is what the code has always done since 1.3.2. The README, the `message_end` comment and the 1.3.2/1.3.3/1.3.6 entries said "when the request completed", which would need `durationMs` — the wording was wrong, the numbers were not
+- The two instants only differ for a request that straddles 01:00/04:00/06:00/10:00 UTC, and DeepSeek does not document whether it bills at receipt or at completion, so the request start is kept (audit finding 1 resolved by wording)
+
 ## 1.3.7 (2026-10-01)
 
 - Chinese public holidays are now off-peak in full, per DeepSeek's rule ("peak hours … excluding Chinese public holidays"): status, countdown, `message_end` cost patching and `/dsp-cost` all treat holiday weekdays as off-peak
