@@ -3,7 +3,7 @@
 import assert from "node:assert/strict";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { isOffPeak, nextPriceChange, formatCountdown, statusText, requestCost, sessionCost, configPath, HOLIDAY_YEARS } from "../extensions/deepseek-peak.ts";
+import extension, { isOffPeak, nextPriceChange, formatCountdown, statusText, requestCost, sessionCost, configPath, HOLIDAY_YEARS } from "../extensions/deepseek-peak.ts";
 
 const H = 3600e3;
 // Fixed clock: 2026-08-21 = Friday, 08-22 = Saturday, 08-23 = Sunday, 08-24 = Monday (UTC).
@@ -251,6 +251,21 @@ const allUnknown = sessionCost([
 close(allUnknown.total, 4.2);
 assert.equal(allUnknown.fallbackMessages, 1);
 assert.deepEqual(allUnknown.unknownModels, ["deepseek-v4.1-flash-x"]);
+
+// --- message_end handler: rewrites usage.cost with the DeepSeek rate (persisted to the session JSONL) ---
+{
+	const handlers: Record<string, Function> = {};
+	extension({ on: (name: string, fn: Function) => (handlers[name] = fn), registerCommand: () => {} } as any);
+	const msg = { role: "assistant", model: "deepseek-v4-pro", responseModel: "deepseek-flash", usage: u(1e6, 1e5, 2e5, 9), timestamp: mon + 2 * H };
+	const out = await handlers.message_end({ message: msg }, {});
+	// flash peak: 0.3 + 0.0006 + 0.24 = 0.5406, responseModel wins over the requested pro id
+	close(out.message.usage.cost.total, 0.5406);
+	close(out.message.usage.cost.input + out.message.usage.cost.cacheRead + out.message.usage.cost.output, 0.5406);
+	assert.equal(out.message.usage.cost.cacheWrite, 0);
+	assert.equal(msg.usage.cost.total, 9, "original message not mutated");
+	assert.equal(await handlers.message_end({ message: { ...msg, model: "x", responseModel: "y" } }, {}), undefined, "unknown model -> pi cost kept");
+	assert.equal(await handlers.message_end({ message: { role: "user" } }, {}), undefined, "non-assistant ignored");
+}
 
 // --- Config path: $PI_CODING_AGENT_DIR when set (leading ~ expanded, like pi), else ~/.pi/agent ---
 const savedAgentDir = process.env.PI_CODING_AGENT_DIR;
