@@ -173,6 +173,14 @@ function rateForIds(
 	return null;
 }
 
+/** Per-field cost (USD) in pi's `usage.cost` shape; the only place the price formula lives. */
+function costBreakdown(rate: Rate, usage: UsageLike) {
+	const input = (usage.input * rate.input) / 1e6;
+	const output = (usage.output * rate.output) / 1e6;
+	const cacheRead = (usage.cacheRead * rate.cacheRead) / 1e6;
+	return { input, output, cacheRead, cacheWrite: 0, total: input + output + cacheRead };
+}
+
 /** Real cost of one request (USD); `known: false` with pi's stored total for models outside the table. */
 export function requestCost(
 	model: string,
@@ -181,8 +189,7 @@ export function requestCost(
 ): { cost: number; known: boolean } {
 	const rate = rateFor(model, ts);
 	if (!rate) return { cost: usage.cost?.total ?? 0, known: false };
-	const cost = (usage.input * rate.input + usage.cacheRead * rate.cacheRead + usage.output * rate.output) / 1e6;
-	return { cost, known: true };
+	return { cost: costBreakdown(rate, usage).total, known: true };
 }
 
 export interface SessionCost {
@@ -414,17 +421,7 @@ export default function (pi: ExtensionAPI) {
 		// the request start is used, and it is the only instant pi records for legacy messages.
 		const resolved = rateForIds([msg.responseModel, msg.model], msg.timestamp ?? Date.now());
 		if (!resolved) return; // unknown model: keep pi's stored cost
-		const rate = resolved.rate;
-		const u = msg.usage;
-		const cost = {
-			input: (u.input * rate.input) / 1e6,
-			output: (u.output * rate.output) / 1e6,
-			cacheRead: (u.cacheRead * rate.cacheRead) / 1e6,
-			cacheWrite: 0,
-			total: 0,
-		};
-		cost.total = cost.input + cost.output + cost.cacheRead;
-		return { message: { ...msg, usage: { ...u, cost } } };
+		return { message: { ...msg, usage: { ...msg.usage, cost: costBreakdown(resolved.rate, msg.usage) } } };
 	});
 
 	pi.on("session_start", async (_event: any, ctx: any) => {

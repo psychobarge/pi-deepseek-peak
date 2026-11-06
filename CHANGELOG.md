@@ -9,6 +9,7 @@
 - `/dsp-cost` now counts pi's `usage` entries (cache keep-warm requests, on by default), re-priced from their model and timestamp; they are real billed requests and were missing from the total
 - `/dsp-cost` keeps pi's stored cost for tool results and compaction/branch summaries instead of re-pricing them with the previous assistant's model, so it matches the footer (`message_end` only patches assistant replies). The `lastModel` guess is gone, and those entries no longer count as "without a rate entry"
 - `npm test` now covers the `message_end` handler (the one that rewrites `usage.cost` in the session file): known model re-priced with `responseModel` winning, original message untouched, unknown model and non-assistant messages left alone
+- The price formula (input + cache hit + output) now lives in one place, shared by `message_end` and `/dsp-cost`, so the footer and the command cannot drift apart. No change in the numbers
 
 ## 1.3.7 (2026-10-01)
 
