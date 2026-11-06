@@ -12,8 +12,8 @@ const PEAK_WINDOWS: Array<[number, number]> = [
 ];
 
 // Chinese public holidays (official State Council dates), off-peak in full. Source:
-// https://publicholidays.cn/ (2026 official; refresh each November when the notice for
-// the next year is released). Make-up workdays (调休) need no entry: they are always
+// State Council notices on gov.cn (2027: https://www.gov.cn/zhengce/content/202611/content_7085101.htm);
+// refresh each November when the notice for the next year is released. Make-up workdays (调休) need no entry: they are always
 // Sat/Sun, which are off-peak anyway, so only weekday holidays can change a decision.
 const CHINA_HOLIDAY_RANGES: Array<[string, string]> = [
 	["2026-01-01", "2026-01-03"], // New Year
@@ -23,6 +23,13 @@ const CHINA_HOLIDAY_RANGES: Array<[string, string]> = [
 	["2026-06-19", "2026-06-21"], // Dragon Boat
 	["2026-09-25", "2026-09-27"], // Mid-Autumn
 	["2026-10-01", "2026-10-07"], // National Day
+	["2027-01-01", "2027-01-03"], // New Year
+	["2027-02-05", "2027-02-13"], // Spring Festival
+	["2027-04-03", "2027-04-05"], // Ching Ming
+	["2027-05-01", "2027-05-05"], // Labour Day
+	["2027-06-09", "2027-06-09"], // Dragon Boat
+	["2027-09-15", "2027-09-15"], // Mid-Autumn
+	["2027-10-01", "2027-10-07"], // National Day
 ];
 
 /** Years covered by CHINA_HOLIDAY_RANGES (the selfcheck refuses to pass on a stale table). */

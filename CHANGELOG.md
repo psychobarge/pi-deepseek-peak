@@ -3,7 +3,9 @@
 ## Unreleased
 
 - Documentation only, no behavior change: the peak/off-peak rate is picked at the instant the request **started** (pi's `timestamp`), which is what the code has always done since 1.3.2. The README, the `message_end` comment and the 1.3.2/1.3.3/1.3.6 entries said "when the request completed", which would need `durationMs` — the wording was wrong, the numbers were not
-- The two instants only differ for a request that straddles 01:00/04:00/06:00/10:00 UTC, and DeepSeek does not document whether it bills at receipt or at completion, so the request start is kept (audit finding 1 resolved by wording)
+- The two instants only differ for a request that straddles 01:00/04:00/06:00/10:00 UTC, and DeepSeek does not document whether it bills at receipt or at completion, so the request start is kept
+- 2027 Chinese public holidays added to `CHINA_HOLIDAY_RANGES` from the official State Council notice (国办发明电〔2026〕10号, 2026-11-05, <https://www.gov.cn/zhengce/content/202611/content_7085101.htm>); the table previously expired on 2027-01-01, a holiday weekday that would have shown as peak and been billed double
+- `npm test` now also requires next year's holidays from November on, so the yearly refresh is flagged before New Year instead of on it. Holiday source moved from publicholidays.cn to gov.cn
 
 ## 1.3.7 (2026-10-01)
 

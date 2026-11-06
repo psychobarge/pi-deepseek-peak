@@ -262,10 +262,15 @@ try {
 	else process.env.PI_CODING_AGENT_DIR = savedAgentDir;
 }
 
-// --- Bundled holiday table must cover the current year (refresh from publicholidays.cn) ---
-assert.ok(
-	HOLIDAY_YEARS.includes(new Date().getUTCFullYear()),
-	"holiday table needs a refresh — see https://publicholidays.cn/",
-);
+// --- Bundled holiday table must cover the current year, and the next one from November
+// (the State Council notice for next year comes out early November) ---
+{
+	const now = new Date();
+	const year = now.getUTCFullYear();
+	assert.ok(HOLIDAY_YEARS.includes(year), "holiday table needs a refresh — see gov.cn State Council notice");
+	if (now.getUTCMonth() >= 10) {
+		assert.ok(HOLIDAY_YEARS.includes(year + 1), `holiday table needs ${year + 1} — see gov.cn State Council notice`);
+	}
+}
 
 console.log("selfcheck OK");
