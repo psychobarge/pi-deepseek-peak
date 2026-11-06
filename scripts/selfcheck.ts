@@ -114,7 +114,7 @@ close(requestCost("deepseek-v4-pro", u(1e6, 1e5, 2e5), mon + 4 * H).cost, 1.0582
 assert.deepEqual(requestCost("deepseek-v4-flash", u(100, 100, 100, 5.5), mon + 2 * H), { cost: 5.5, known: false });
 assert.deepEqual(requestCost("deepseek-chat", u(100, 100, 100, 5.5), mon + 2 * H), { cost: 5.5, known: false });
 
-// --- sessionCost: peak + off-peak assistants, nested tool usage attributed to preceding assistant ---
+// --- sessionCost: peak + off-peak assistants re-priced, nested tool usage kept at pi's stored cost ---
 const msgEntry = (role: string, model: string, ts: number, usage: ReturnType<typeof u>) => ({
 	type: "message",
 	timestamp: new Date(ts).toISOString(),
@@ -122,21 +122,29 @@ const msgEntry = (role: string, model: string, ts: number, usage: ReturnType<typ
 });
 const flashPeak = msgEntry("assistant", "deepseek-flash", mon + 2 * H, u(1e6, 0, 0)); // 0.3 peak
 const proOff = msgEntry("assistant", "deepseek-v4-pro", mon + 4 * H, u(0, 0, 1e5)); // 0.198 off-peak
-const toolNested = msgEntry("toolResult", "deepseek-v4-pro", mon + 4.1 * H, u(1e6, 0, 0)); // 0.66 off-peak (pro)
+const toolNested = msgEntry("toolResult", "deepseek-v4-pro", mon + 4.1 * H, u(1e6, 0, 0, 0.5)); // stored 0.5, not re-priced
 const fallback = msgEntry("assistant", "deepseek-chat", mon + 5 * H, u(100, 100, 100, 7)); // stored 7, unknown
 const sc = sessionCost([flashPeak, proOff, toolNested, fallback]);
-close(sc.total, 8.158);
+close(sc.total, 7.998);
 close(sc.peakCost, 0.3);
-close(sc.offPeakCost, 0.858);
+close(sc.offPeakCost, 0.198);
 close(sc.byModel["deepseek-flash"].cost, 0.3);
 assert.equal(sc.byModel["deepseek-flash"].tokens, 1e6);
-close(sc.byModel["deepseek-v4-pro"].cost, 0.858);
-assert.equal(sc.byModel["deepseek-v4-pro"].tokens, 1.1e6);
+close(sc.byModel["deepseek-v4-pro"].cost, 0.198);
+assert.equal(sc.byModel["deepseek-v4-pro"].tokens, 1e5);
 assert.equal(sc.fallbackMessages, 1);
-// nested tool usage before any assistant -> counted at stored cost
-const lone = sessionCost([msgEntry("toolResult", "deepseek-v4-pro", mon + 2 * H, u(100, 0, 0, 3))]);
-close(lone.total, 3);
-assert.equal(lone.fallbackMessages, 1);
+// tool results and compactions keep pi's stored cost (same as the footer), not counted as fallback
+const lone = sessionCost([
+	msgEntry("toolResult", "deepseek-v4-pro", mon + 2 * H, u(100, 0, 0, 3)),
+	{ type: "compaction", timestamp: new Date(mon + 2 * H).toISOString(), usage: u(1e6, 0, 0, 0.25) },
+]);
+close(lone.total, 3.25);
+assert.equal(lone.fallbackMessages, 0);
+// `usage` entries (cache keep-warm requests) are re-priced from their model at their timestamp
+const warm = sessionCost([{ type: "usage", model: "deepseek-flash", timestamp: new Date(mon + 2 * H).toISOString(), usage: u(0, 1e6, 0, 9) }]);
+close(warm.total, 0.006); // peak cache hit, not the stored 9
+close(warm.peakCost, 0.006);
+close(warm.byModel["deepseek-flash"].cost, 0.006);
 // responseModel overrides the requested model id
 const rm = sessionCost([{ ...msgEntry("assistant", "deepseek-v4-flash", mon + 2 * H, u(1e6, 0, 0)), message: { role: "assistant", model: "deepseek-v4-flash", responseModel: "deepseek-v4-pro", usage: u(1e6, 0, 0), timestamp: mon + 2 * H } }]);
 close(rm.total, 1.32);

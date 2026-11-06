@@ -6,6 +6,8 @@
 - The two instants only differ for a request that straddles 01:00/04:00/06:00/10:00 UTC, and DeepSeek does not document whether it bills at receipt or at completion, so the request start is kept
 - 2027 Chinese public holidays added to `CHINA_HOLIDAY_RANGES` from the official State Council notice (国办发明电〔2026〕10号, 2026-11-05, <https://www.gov.cn/zhengce/content/202611/content_7085101.htm>); the table previously expired on 2027-01-01, a holiday weekday that would have shown as peak and been billed double
 - `npm test` now also requires next year's holidays from November on, so the yearly refresh is flagged before New Year instead of on it. Holiday source moved from publicholidays.cn to gov.cn
+- `/dsp-cost` now counts pi's `usage` entries (cache keep-warm requests, on by default), re-priced from their model and timestamp; they are real billed requests and were missing from the total
+- `/dsp-cost` keeps pi's stored cost for tool results and compaction/branch summaries instead of re-pricing them with the previous assistant's model, so it matches the footer (`message_end` only patches assistant replies). The `lastModel` guess is gone, and those entries no longer count as "without a rate entry"
 
 ## 1.3.7 (2026-10-01)
 

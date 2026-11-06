@@ -196,8 +196,8 @@ export interface SessionCost {
 
 /**
  * Real session cost from session entries: per-message model and request-start timestamp, peak/off-peak split.
- * Nested tool usage and compaction/branch summaries are attributed to the nearest preceding
- * assistant message's model; without one they count at pi's stored cost (fallbackMessages).
+ * Assistant replies and `usage` entries (cache keep-warm requests) are re-priced; tool results and
+ * compaction/branch summaries keep pi's stored cost, like the footer (message_end only patches assistants).
  */
 export function sessionCost(entries: any[]): SessionCost {
 	const result: SessionCost = {
@@ -209,30 +209,28 @@ export function sessionCost(entries: any[]): SessionCost {
 		unknownModels: [],
 	};
 	const unknown = new Set<string>();
-	let lastModel: string | null = null;
 	for (const entry of entries) {
 		let ids: Array<string | undefined | null> = [];
 		let usage: UsageLike | null = null;
-		let isAssistant = false;
 		let ts: Timestamp = entry.timestamp;
 		if (entry.type === "message") {
 			const msg = entry.message;
 			ts = msg.timestamp ?? entry.timestamp;
 			if (msg.role === "assistant") {
 				ids = [msg.responseModel, msg.model];
-				isAssistant = true;
 				usage = msg.usage;
 			} else if (msg.role === "toolResult" && msg.usage) {
-				ids = [lastModel];
-				usage = msg.usage;
+				result.total += msg.usage.cost?.total ?? 0;
 			}
-		} else if ((entry.type === "compaction" || entry.type === "branch_summary") && entry.usage) {
-			ids = [lastModel];
+		} else if (entry.type === "usage" && entry.usage) {
+			// pi stamps it on completion, but a warm request is maxTokens 1, so start ≈ end. model = responseModel ?? model.
+			ids = [entry.model];
 			usage = entry.usage;
+		} else if ((entry.type === "compaction" || entry.type === "branch_summary") && entry.usage) {
+			result.total += entry.usage.cost?.total ?? 0;
 		}
 		if (!usage) continue;
 		const resolved = rateForIds(ids, ts);
-		if (isAssistant) lastModel = resolved?.model ?? ids[0] ?? null;
 		if (!resolved) {
 			result.total += usage.cost?.total ?? 0;
 			result.fallbackMessages++;

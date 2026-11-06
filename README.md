@@ -40,7 +40,7 @@ Chinese public holidays come from a table bundled in the source, taken from the 
 /dsp-cost         # recompute the whole session's real cost
 ```
 
-`/dsp-cost` re-prices every message from its stored model and request-start timestamp, so it is correct for sessions resumed from disk, and prints:
+`/dsp-cost` re-prices every assistant reply and cache keep-warm (`usage`) request from its stored model and request-start timestamp, so it is correct for sessions resumed from disk. Tool results and compaction/branch summaries keep pi's stored cost, the same figure the footer shows. It prints:
 
 - current-period rates per model
 - `Total $X (peak $A / off-peak $B)`
