@@ -186,15 +186,10 @@ function costBreakdown(rate: Rate, usage: UsageLike) {
 	return { input, output, cacheRead, cacheWrite: 0, total: input + output + cacheRead };
 }
 
-/** Real cost of one request (USD); `known: false` with pi's stored total for models outside the table. */
-export function requestCost(
-	model: string,
-	usage: UsageLike,
-	ts: Timestamp,
-): { cost: number; known: boolean } {
+/** Real cost of one request (USD); pi's stored total for models outside the table. */
+export function requestCost(model: string, usage: UsageLike, ts: Timestamp): number {
 	const rate = rateFor(model, ts);
-	if (!rate) return { cost: usage.cost?.total ?? 0, known: false };
-	return { cost: costBreakdown(rate, usage).total, known: true };
+	return rate ? costBreakdown(rate, usage).total : (usage.cost?.total ?? 0);
 }
 
 export interface SessionCost {
@@ -249,7 +244,7 @@ export function sessionCost(entries: any[]): SessionCost {
 			for (const id of ids) if (id) unknown.add(id);
 			continue;
 		}
-		const { cost } = requestCost(resolved.model, usage, ts);
+		const cost = requestCost(resolved.model, usage, ts);
 		result.total += cost;
 		const bucket = (result.byModel[resolved.model] ??= { tokens: 0, cost: 0 });
 		bucket.tokens += usage.totalTokens ?? usage.input + usage.output + usage.cacheRead + usage.cacheWrite;

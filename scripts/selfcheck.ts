@@ -100,20 +100,20 @@ const u = (input: number, cacheRead: number, output: number, storedTotal = 0) =>
 });
 
 // requestCost: flash, peak (Mon 02:00 UTC): 1M miss + 100k hit + 200k out -> 0.3 + 0.0006 + 0.24
-close(requestCost("deepseek-flash", u(1e6, 1e5, 2e5), mon + 2 * H).cost, 0.5406);
+close(requestCost("deepseek-flash", u(1e6, 1e5, 2e5), mon + 2 * H), 0.5406);
 // off-peak (Mon 04:00) -> exactly half
-close(requestCost("deepseek-flash", u(1e6, 1e5, 2e5), mon + 4 * H).cost, 0.2703);
+close(requestCost("deepseek-flash", u(1e6, 1e5, 2e5), mon + 4 * H), 0.2703);
 // boundary 03:59:59.999 peak vs 04:00 off-peak
-close(requestCost("deepseek-flash", u(1e6, 0, 0), mon + 4 * H - 1).cost, 0.3);
-close(requestCost("deepseek-flash", u(1e6, 0, 0), mon + 4 * H).cost, 0.15);
+close(requestCost("deepseek-flash", u(1e6, 0, 0), mon + 4 * H - 1), 0.3);
+close(requestCost("deepseek-flash", u(1e6, 0, 0), mon + 4 * H), 0.15);
 // weekend Beijing rule applies to pricing: Sat 02:00 UTC -> off-peak rates
-close(requestCost("deepseek-flash", u(1e6, 0, 0), sat + 2 * H).cost, 0.15);
+close(requestCost("deepseek-flash", u(1e6, 0, 0), sat + 2 * H), 0.15);
 // pro values: 1.32 + 0.0044 + 0.792 = 2.1164
-close(requestCost("deepseek-v4-pro", u(1e6, 1e5, 2e5), mon + 2 * H).cost, 2.1164);
-close(requestCost("deepseek-v4-pro", u(1e6, 1e5, 2e5), mon + 4 * H).cost, 1.0582);
-// retired ids and unknown models are not in the table -> known: false, cost = pi's stored total
-assert.deepEqual(requestCost("deepseek-v4-flash", u(100, 100, 100, 5.5), mon + 2 * H), { cost: 5.5, known: false });
-assert.deepEqual(requestCost("deepseek-chat", u(100, 100, 100, 5.5), mon + 2 * H), { cost: 5.5, known: false });
+close(requestCost("deepseek-v4-pro", u(1e6, 1e5, 2e5), mon + 2 * H), 2.1164);
+close(requestCost("deepseek-v4-pro", u(1e6, 1e5, 2e5), mon + 4 * H), 1.0582);
+// retired ids and unknown models are not in the table -> pi's stored total
+assert.equal(requestCost("deepseek-v4-flash", u(100, 100, 100, 5.5), mon + 2 * H), 5.5);
+assert.equal(requestCost("deepseek-chat", u(100, 100, 100, 5.5), mon + 2 * H), 5.5);
 
 // --- sessionCost: peak + off-peak assistants re-priced, nested tool usage kept at pi's stored cost ---
 const msgEntry = (role: string, model: string, ts: number, usage: ReturnType<typeof u>) => ({
@@ -152,7 +152,7 @@ close(rm.total, 1.32);
 close(rm.byModel["deepseek-v4-pro"].cost, 1.32);
 
 // --- Holiday weekdays price at off-peak rates, and mix with normal peak days in a session ---
-close(requestCost("deepseek-flash", u(1e6, 0, 0), Date.UTC(2026, 1, 16, 2)).cost, 0.15); // Spring Festival Monday
+close(requestCost("deepseek-flash", u(1e6, 0, 0), Date.UTC(2026, 1, 16, 2)), 0.15); // Spring Festival Monday
 const holidayMix = sessionCost([
 	msgEntry("assistant", "deepseek-flash", Date.UTC(2026, 1, 16, 2), u(1e6, 0, 0)), // holiday -> 0.15
 	msgEntry("assistant", "deepseek-flash", Date.UTC(2026, 1, 9, 2), u(1e6, 0, 0)), // normal Monday -> 0.3
@@ -167,15 +167,15 @@ const sep9 = Date.UTC(2026, 8, 9); // Wednesday
 const sep10 = Date.UTC(2026, 8, 10); // Thursday
 
 // peak 0.30/M miss whatever the date (Wed 02:00 and Thu 07:00 UTC are both peak)
-close(requestCost("deepseek-flash", u(1e6, 0, 0), sep9 + 2 * H).cost, 0.3);
-close(requestCost("deepseek-flash", u(1e6, 0, 0), sep10 + 7 * H).cost, 0.3);
+close(requestCost("deepseek-flash", u(1e6, 0, 0), sep9 + 2 * H), 0.3);
+close(requestCost("deepseek-flash", u(1e6, 0, 0), sep10 + 7 * H), 0.3);
 // off-peak 0.15/M miss, 0.003/M hit
-close(requestCost("deepseek-flash", u(1e6, 0, 0), sep9 + 20 * H).cost, 0.15);
-close(requestCost("deepseek-flash", u(1e6, 0, 0), sep10 + 20 * H).cost, 0.15);
-close(requestCost("deepseek-flash", u(0, 1e6, 0), sep10 + 20 * H).cost, 0.003);
+close(requestCost("deepseek-flash", u(1e6, 0, 0), sep9 + 20 * H), 0.15);
+close(requestCost("deepseek-flash", u(1e6, 0, 0), sep10 + 20 * H), 0.15);
+close(requestCost("deepseek-flash", u(0, 1e6, 0), sep10 + 20 * H), 0.003);
 // retired ids are out of the table (they still price via the reported responseModel)
-assert.deepEqual(requestCost("deepseek-v4-flash", u(1e6, 0, 0, 3), sep10 + 7 * H), { cost: 3, known: false });
-assert.deepEqual(requestCost("deepseek-v4-flash-vision-exp", u(1e6, 0, 0, 3), sep10 + 7 * H), { cost: 3, known: false });
+assert.equal(requestCost("deepseek-v4-flash", u(1e6, 0, 0, 3), sep10 + 7 * H), 3);
+assert.equal(requestCost("deepseek-v4-flash-vision-exp", u(1e6, 0, 0, 3), sep10 + 7 * H), 3);
 
 // --- V4.1: the API reports `responseModel: "deepseek-flash"` for every request (including
 // deepseek-v4-flash). It is the canonical id and must price at the V4.1 flash table. ---
@@ -200,17 +200,17 @@ assert.equal(reg.byModel["deepseek-flash"].tokens, 1e6);
 assert.deepEqual(reg.unknownModels, []);
 
 // requestCost on the canonical id: peak 0.3 + 0.0006 + 0.24 = 0.5406
-close(requestCost("deepseek-flash", u(1e6, 1e5, 2e5), sep10 + 7 * H).cost, 0.5406);
-close(requestCost("deepseek-flash", u(1e6, 1e5, 2e5), sep10 + 20 * H).cost, 0.2703);
-close(requestCost("deepseek-flash", u(0, 1e6, 0), sep10 + 20 * H).cost, 0.003);
+close(requestCost("deepseek-flash", u(1e6, 1e5, 2e5), sep10 + 7 * H), 0.5406);
+close(requestCost("deepseek-flash", u(1e6, 1e5, 2e5), sep10 + 20 * H), 0.2703);
+close(requestCost("deepseek-flash", u(0, 1e6, 0), sep10 + 20 * H), 0.003);
 
 // --- Pro keeps its own rates: the pro->flash routing was retracted, so 2026-09-14 04:00 UTC
 // (Monday, off-peak) and 07:00 UTC (peak) are billed at the pro table. ---
 const proCut = Date.UTC(2026, 8, 14, 4);
 // 04:00 UTC off-peak -> half of 1.32
-close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), proCut).cost, 0.66);
+close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), proCut), 0.66);
 // +3h (07:00 UTC, peak) -> full pro rate, not flash 0.30
-close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), proCut + 3 * H).cost, 1.32);
+close(requestCost("deepseek-v4-pro", u(1e6, 0, 0), proCut + 3 * H), 1.32);
 const sc3 = sessionCost([
 	msgEntry("assistant", "deepseek-v4-pro", proCut + 3 * H, u(1e6, 0, 0)), // 1.32 peak
 	msgEntry("assistant", "deepseek-v4-pro", proCut, u(1e6, 0, 0)), // 0.66 off-peak

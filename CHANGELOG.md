@@ -11,6 +11,7 @@
 - `npm test` now covers the `message_end` handler (the one that rewrites `usage.cost` in the session file): known model re-priced with `responseModel` winning, original message untouched, unknown model and non-assistant messages left alone
 - The price formula (input + cache hit + output) now lives in one place, shared by `message_end` and `/dsp-cost`, so the footer and the command cannot drift apart. No change in the numbers
 - Config save is atomic (written to `deepseek-peak.json.tmp` then renamed), so pi being killed mid-write no longer leaves a truncated file that silently resets the settings to defaults. The config directory is created if missing, so `/dsp-countdown` and `/dsp-refresh` no longer fail when `PI_CODING_AGENT_DIR` points to a directory that does not exist yet
+- `requestCost` returns the cost as a plain number instead of `{ cost, known }`: `known` was only read by the tests
 
 ## 1.3.7 (2026-10-01)
 
