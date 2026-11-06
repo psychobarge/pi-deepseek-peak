@@ -146,17 +146,12 @@ function toMs(ts: Timestamp): number {
 	return typeof ts === "number" ? ts : new Date(ts).getTime();
 }
 
-/** Peak rates (USD/1M) for a model, or null when the model isn't in the table. */
-function ratesFor(model: string): Rate | null {
-	return RATES[model] ?? null;
-}
-
 /**
  * Effective per-token rates (USD) for a model at a timestamp, or null when the model isn't in the table.
  * `ts` is the instant the request started (`message.timestamp`), never the response end.
  */
 function rateFor(model: string, ts: Timestamp): Rate | null {
-	const peak = ratesFor(model);
+	const peak = RATES[model];
 	if (!peak) return null;
 	const k = isOffPeak(new Date(toMs(ts))) ? 0.5 : 1;
 	return { input: peak.input * k, cacheRead: peak.cacheRead * k, output: peak.output * k };
@@ -173,7 +168,7 @@ function rateForIds(
 	ts: Timestamp,
 ): { model: string; rate: Rate } | null {
 	for (const id of ids) {
-		if (id && ratesFor(id)) return { model: id, rate: rateFor(id, ts)! };
+		if (id && RATES[id]) return { model: id, rate: rateFor(id, ts)! };
 	}
 	return null;
 }
@@ -373,7 +368,7 @@ export default function (pi: ExtensionAPI) {
 			const fmt = (n: number) => `$${Math.round(n * 10000) / 10000}`;
 			const k = isOffPeak(new Date()) ? 0.5 : 1;
 			const rates = (m: string) => {
-				const r = ratesFor(m);
+				const r = RATES[m];
 				if (!r) return ""; // not in the table; no per-model line for it
 				return `in ${fmt(r.input * k)}/M (hit ${fmt(r.cacheRead * k)}) out ${fmt(r.output * k)}/M`;
 			};
